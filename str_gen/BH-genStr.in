@@ -1,0 +1,139 @@
+# Basin-Hopping +STUN code for finding the NP structure with the global minimal energy by LAMMPS
+# Author: Prof. Shin-Pon Ju at NSYSU (FEB. 20 2017)
+# It should be noted that " Don't try to rename any file of this code. Otherwise the "jump" command may not 
+# find the corresponding label to jump to.
+#The car file output script is in MC_keep.in and you need to modify them as your own atom style for materials studio
+
+variable var equal 85850
+variable JumpFileName index BH-DNAPRo_85850.in #Jump File Name
+variable FoldName index BH-genStr #Jump File Name
+#log none #${var}.log
+#log lmp_85850.log
+
+shell mkdir ${FoldName}
+include BH_para.in # claim required parameters
+
+variable material_1 index DNA  				#Change     material
+variable material_2 index Cancer_Cell 		#Non-change material
+
+units           real
+atom_style      full
+boundary		p p p #****************
+#box tilt 		large
+special_bonds 	lj 0 0 0 coul 0 .1 .1# lj/coul 0 1 1	"0 1 1" is for MARTINI, 0 0 0 for structure generation 	
+dielectric      2.5 					#���q�Y��
+neighbor        2.0 bin				#1.2 bin
+neigh_modify    every 1 delay 0 one 5000 check yes
+read_data       2mole_water.data 		#00IniBigloop_.data 
+include 		all_data_2mole_waterGen.in			#forcefield parameters
+#comm_style tiled 
+fix oldq all store/state 0 q	 # charge is non-zero , store charge for each atom 
+variable q atom f_oldq
+
+###################################  group  ##################################
+#為了要移動原子，將他原先的type順序group起來    							##
+group Backbone molecule == 4												##
+group Bases molecule == 3													##
+group ${material_1} molecule 4 3											##
+group ${material_2} molecule 2 1 											##
+group water_ions molecule 	 15 19 18 										##
+group ${material_1}_water_ions molecule 4 3 15 19 18						##
+##############################################################################
+												##
+#pair_modify 	shift yes #not used for MARTINI
+run_style respa 4 2 2 2  bond 1 angle 2 dihedral 3 pair 4 #multiple timestep
+timestep ${timesize} #timesize = 10
+########################### parameters #######################################
+#c_1 為兩分子間的作用力
+#c_2 為ssDNA的能量(主要是要加入穩定的ssDNA能量納入考量)
+compute 1 Bases group/group ${material_2} pair yes boundary no 		#鹼基和LOOP
+compute ssDNA ${material_1} pe/atom									#DNA PE
+compute 2 ${material_1} reduce sum c_ssDNA 							#TOTAL DNA
+compute center1 ${material_1} com   ###a group function can do this #DNA質心      
+compute center2 ${material_2} com									#蛋白質質心
+
+#get pe grpgrpE ssDNA+halfGrpEng half_GrpGrpEng
+variable PotEng_all equal pe ### get the potential energy			
+variable GrpGrpEng equal c_1 ### ${GrpGrpEng} is the group/group energy *******
+variable ssDNA_halfEng equal c_2 ### ssDNA + ${GrpGrpEng}/2   
+variable half_GrpGrpEng equal v_GrpGrpEng*0.5 ### ${GrpGrpEng}/2
+variable ssDNA equal v_ssDNA_halfEng-v_half_GrpGrpEng ### ssDNA   *******
+variable GGE_ssDNA equal v_ssDNA+v_GrpGrpEng 
+#For DNA restrain Variable
+variable xcom1 equal c_center1[1]            
+variable ycom1 equal c_center1[2]            
+#variable zcom1 equal c_center1[3]
+variable zcom1 equal c_center2[3] #平面靠近        
+variable xcom2 equal c_center2[1]
+variable ycom2 equal c_center2[2]
+variable zcom2 equal c_center2[3]
+variable xmove equal v_xcom1-v_xcom2 #from com2 to com1
+variable ymove equal v_ycom1-v_ycom2
+variable zmove equal v_zcom1-v_zcom2
+variable unitm1 equal sqrt(v_xmove^2+v_ymove^2+v_zmove^2)
+variable 2to1_xmove equal (v_xmove/v_unitm1)
+variable 2to1_ymove equal (v_ymove/v_unitm1)
+variable 2to1_zmove equal (v_zmove/v_unitm1)  
+variable xmoveDNA equal v_xcom2-v_xcom1
+variable ymoveDNA equal v_ycom2-v_ycom1
+variable zmoveDNA equal v_zcom2-v_zcom1
+variable unitm equal sqrt(v_xmoveDNA^2+v_ymoveDNA^2+v_zmoveDNA^2)
+variable 1to2_xmove equal v_xmoveDNA/v_unitm
+variable 1to2_ymove equal v_ymoveDNA/v_unitm
+variable 1to2_zmove equal v_zmoveDNA/v_unitm
+#For Big Loop Variable
+variable nbetterglo equal 0
+variable incrbetterglo equal v_nbetterglo+1 # for labelling the global better configuration for big BH loop
+variable globalE_S equal 1e10				# assign a super large initial value to be replaced after the first big BH loop 
+variable globalE_G equal 1e10				# assign a super large initial value to be replaced after the first big BH loop 
+variable Big_BH_No loop ${big_bhloop}		#big_bhloop = 100
+########################### rotation ####################################
+include rotation.in
+
+reset_timestep 0
+	shell cd ${FoldName}
+		dump 10 all custom 1 ini.xyz id mol type q x y z ix iy iz    #存最初始結構
+		run 0
+		undump 10
+	shell cd ..
+##################### Big_BH_loop ######################
+label Big_BH_loop
+delete_atoms group water_ions
+special_bonds 	lj 0 0 0 coul 0 .1 .1
+include global_move.in #將本次大迴圈移動過後的ini.xyz做為之後小迴圈參考的依據
+shell cd ${FoldName}
+	dump 10 all custom 1 ini.xyz id mol type q x y z ix iy iz
+	run 0
+	undump 10
+	
+shell cd ..
+##################### Binding ##########################
+include all_data_Gen.in
+shell cd ${FoldName}
+thermo 1000
+set group ${material_1} charge 5e-2 #need to try and error for proper charge value
+set group ${material_2} charge -5e-2
+
+fix 123 ${material_2} spring/self 10.0
+fix_modify 123 energy yes
+#dump 1 all custom 100 StrGen_*.cfg id type x y z
+minimize 0 0 10000 10000
+#undump 1
+set group all charge v_q #set correct atomic charges back before write_data 
+#write_data after_Min.data nocoeff
+shell cd ..
+include all_data_mix.in
+special_bonds 	lj 0 1 1 coul 0 1 1
+fix 123 ${material_2} spring/self 10.0
+minimize 0 0 10000 100000
+unfix 123
+##################### deposit #####################################
+include deposit_water.in
+include box_relax.in
+##################### output Big_BH_No initial structures ######################
+shell cd ${FoldName}
+write_data 00IniBigloop_${Big_BH_No}.data nocoeff #輸出本次大迴圈的初始檔案
+shell cd ..
+next Big_BH_No
+jump ${FoldName}.in Big_BH_loop #跳回此檔案的大迴圈
+print "******* ALL DONE ****"

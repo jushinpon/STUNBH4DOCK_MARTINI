@@ -1,0 +1,3413 @@
+LAMMPS (27 Oct 2021)
+  using 12 OpenMP thread(s) per MPI task
+package omp 0
+using multi-threaded neighbor list subroutines
+package omp 12
+using multi-threaded neighbor list subroutines
+# Basin-Hopping +STUN code for finding the NP structure with the global minimal energy by LAMMPS
+# Author: Prof. Shin-Pon Ju at NSYSU (FEB. 20 2017)
+# It should be noted that " Don't try to rename any file of this code. Otherwise the "jump" command may not
+# find the corresponding label to jump to.
+#The car file output script is in MC_keep.in and you need to modify them as your own atom style for materials studio
+#watch out shake bond type in MD.in
+
+variable FoldName index STUN_BH_out #rm in sbatch file
+
+shell mkdir ${FoldName}
+shell mkdir STUN_BH_out
+print "1"
+1
+include BH_para.in # claim required parameters
+#var = cluster change
+variable rand equal random(1,100000,23456)
+variable seed equal round(v_rand) #modify this
+variable  MC_rn equal random(0.0,1.0,${seed}) ## random number for MC evaluation
+variable  MC_rn equal random(0.0,1.0,73113) 
+variable rand_Dr equal random(-1,1,${seed}) ## prefact value for random atomic movement
+variable rand_Dr equal random(-1,1,96191) 
+variable rand_Dr_axial equal random(0,0.5,${seed}) ## for axial move of NW
+variable rand_Dr_axial equal random(0,0.5,31079) 
+variable seed1 equal ceil(v_MC_rn*${seed})
+variable seed1 equal ceil(v_MC_rn*27332)
+#variable  MC_rn1 equal random(-1.0,1.0,${seed}1)
+variable bhloop equal 1000 #BH loop number
+variable opt_step1 equal 20000 #system_opt.in
+variable opt_step2 equal 20000 #system_opt.in
+variable adjust_increment equal 0.5/${bhloop}
+variable adjust_increment equal 0.5/1000
+variable BB_ratio equal -0.1
+variable BB_length equal 1 # for constructing BB box cell lengths
+variable BB_length_basis equal 1
+variable opt_No1 equal 1
+variable changebox equal 0.2
+variable ubound equal 25 ###get this from OVITO ##########>??????????
+variable lbound equal 0  ###get this from OVITO
+
+variable Rangle_Big equal random(-180.0,180.0,${seed})
+variable Rangle_Big equal random(-180.0,180.0,94036)
+variable Rangle1 equal random(-2.5,2.5,${seed})
+variable Rangle1 equal random(-2.5,2.5,60382)
+variable Rangle2 equal random(-2.5,2.5,${seed})
+variable Rangle2 equal random(-2.5,2.5,71336)
+variable timesize equal 10					#timestep=10
+variable fire_timesize equal ${timesize}*5
+variable fire_timesize equal 10*5
+variable fire_step equal 1000
+variable Tdamp equal ${timesize}*100
+variable Tdamp equal 10*100
+variable Pdamp equal ${timesize}*1000
+variable Pdamp equal 10*1000
+variable Ann_T equal 400 # the starting temperature for annealing
+variable MD_step equal 5000 # step for MD
+variable DMDAnn_T equal 350 # the starting temperature for annealing
+variable DMD_step equal 5000 # step for MD
+
+variable Eq_step equal 30000 # step for equilibrium
+
+#STUN Boltzmann factor setting
+variable kT equal 1 #0.000625         # initial kT in Boltzmann factor
+variable kT_inc equal 2 # multiple factor of KT for increasing KT
+variable kT_dec equal 0.5 # multiple factor of KT for decreasing KT
+variable kT_adj equal 20 # KT adjusting frequency (How many loops to invoke KT adjusting_
+variable desired_ratio equal 0.8
+variable desired_upper equal 0.6
+variable desired_lower equal 0.3
+variable iniT equal 600
+variable Tincr equal (${iniT}-300)/(${bhloop}-1)
+variable Tincr equal (600-300)/(${bhloop}-1)
+variable Tincr equal (600-300)/(1000-1)
+print "2"
+2
+variable material_1 index DNA  				#Change     material
+variable material_2 index Cancer_Cell 		#Non-change material
+
+units           real
+atom_style      full
+boundary		p p p
+#box tilt 		large
+special_bonds 	lj/coul 0 1 1
+dielectric      2.5
+neighbor        2.0 bin				#1.2 bin
+neigh_modify    every 5 delay 10 one 5000 check yes
+read_data      After_NVT.data # 00IniBigloop_1.data 		#00IniBigloop_.data
+Reading data file ...
+  orthogonal box = (-47.106954 -28.275943 61.880504) to (16.388915 45.437842 123.61120)
+  1 by 1 by 1 MPI processor grid
+  reading atoms ...
+  7236 atoms
+  reading velocities ...
+  7236 velocities
+  scanning bonds ...
+  6 = max bonds/atom
+  scanning angles ...
+  3 = max angles/atom
+  scanning dihedrals ...
+  1 = max dihedrals/atom
+  scanning impropers ...
+  3 = max impropers/atom
+  reading bonds ...
+  7366 bonds
+  reading angles ...
+  2655 angles
+  reading dihedrals ...
+  10 dihedrals
+  reading impropers ...
+  51 impropers
+Finding 1-2 1-3 1-4 neighbors ...
+  special bond factors lj:    0        1        1       
+  special bond factors coul:  0        1        1       
+     8 = max # of 1-2 neighbors
+     8 = max # of special neighbors
+  special bonds CPU = 0.001 seconds
+  read_data CPU = 0.027 seconds
+include 		all_data_2mole_water.in			#forcefield parameters
+#Masses
+
+bond_style harmonic
+
+bond_coeff    1 8.96271510375      3.3 #AC1-P5-8.96271510375-3.3
+bond_coeff    2 8.96271510375      3.3 #AC1-Qd-8.96271510375-3.3
+bond_coeff    3 8.96271510375        3 #C3-P4-8.96271510375-3
+bond_coeff    4 5.9751434025      3.3 #C3-P5-5.9751434025-3.3
+bond_coeff    5 5.9751434025      2.8 #C3-Qd-5.9751434025-2.8
+bond_coeff    6 2.98757170125        4 #C5-P5-2.98757170125-4
+bond_coeff    7 8.96271510375      3.1 #C5-P5-8.96271510375-3.1
+bond_coeff    8 5.9751434025      3.3 #N0-P5-5.9751434025-3.3
+bond_coeff    9 5.9751434025      3.4 #N0-Qd-5.9751434025-3.4
+bond_coeff   10 8.96271510375      2.5 #P1-P5-8.96271510375-2.5
+bond_coeff   11 1.493785850625      3.5 #P4-P5-1.493785850625-3.5
+bond_coeff   12 5.9751434025        4 #P4-P5-5.9751434025-4
+bond_coeff   13 1.493785850625      3.5 #P5-P5-1.493785850625-3.5
+bond_coeff   14 5.9751434025      3.2 #P5-P5-5.9751434025-3.2
+bond_coeff   15 1.493785850625      3.5 #P5-Qa-1.493785850625-3.5
+bond_coeff   16 5.9751434025        4 #P5-Qa-5.9751434025-4
+bond_coeff   17 8.96271510375      3.2 #P5-Qa-8.96271510375-3.2
+bond_coeff   18 1.493785850625      3.5 #P5-Qd-1.493785850625-3.5
+bond_coeff   19 5.9751434025        3 #P5-SC4-5.9751434025-3
+bond_coeff   20 5.9751434025      3.2 #P5-SC4-5.9751434025-3.2
+bond_coeff   21 8.96271510375      3.2 #P5-SC4-8.96271510375-3.2
+bond_coeff   22 8.96271510375      3.1 #P5-SC5-8.96271510375-3.1
+bond_coeff   23        100      2.7 #constrained bond
+bond_coeff   24        100      2.7 #constrained bond
+bond_coeff   25        100      2.7 #constrained bond
+bond_coeff   26        100      2.6 #constrained bond
+bond_coeff   27        100     2.65 #constrained bond
+bond_coeff   28        100      2.7 #constrained bond
+bond_coeff   29        100      2.7 #constrained bond
+bond_coeff   30        100      2.7 #constrained bond
+bond_coeff   31        100      2.6 #constrained bond
+bond_coeff   32        100      2.7 #constrained bond
+bond_coeff   33        100      2.7 #constrained bond
+bond_coeff   34        100      2.7 #constrained bond
+bond_coeff   35        100      2.6 #constrained bond
+bond_coeff   36        100     2.65 #constrained bond
+bond_coeff   37        100     2.65 #constrained bond
+bond_coeff   38        100      3.1 #constrained bond
+bond_coeff   39        100      2.7 #constrained bond
+bond_coeff   40        100      2.7 #constrained bond
+bond_coeff   41        100      2.7 #constrained bond
+bond_coeff   42        100     2.65 #constrained bond
+bond_coeff   43        100      2.6 #constrained bond
+bond_coeff   44        100      2.6 #constrained bond
+bond_coeff   45        100      2.6 #constrained bond
+bond_coeff   46        100     2.65 #constrained bond
+bond_coeff   47        100      2.7 #constrained bond
+bond_coeff   48        100      2.7 #constrained bond
+bond_coeff   49        100      2.7 #constrained bond
+bond_coeff   50        100     2.65 #constrained bond
+bond_coeff   51        100      2.7 #constrained bond
+bond_coeff   52        100      2.7 #constrained bond
+bond_coeff   53        100      2.7 #constrained bond
+bond_coeff   54        100      2.7 #constrained bond
+bond_coeff   55        100      2.7 #constrained bond
+bond_coeff   56        100      2.7 #constrained bond
+bond_coeff   57        100      2.7 #constrained bond
+bond_coeff   58        100      2.7 #constrained bond
+bond_coeff   59        100      3.1 #constrained bond
+bond_coeff   60        100      2.7 #constrained bond
+bond_coeff   61        100      2.7 #constrained bond
+bond_coeff   62        100      2.7 #constrained bond
+bond_coeff   63        100      2.6 #constrained bond
+bond_coeff   64        100      2.7 #constrained bond
+bond_coeff   65        100      2.7 #constrained bond
+bond_coeff   66        100      2.7 #constrained bond
+bond_coeff   67        100      2.6 #constrained bond
+bond_coeff   68        100     2.65 #constrained bond
+bond_coeff   69        100      2.6 #constrained bond
+bond_coeff   70        100      2.7 #constrained bond
+bond_coeff   71        100      2.7 #constrained bond
+bond_coeff   72        100      2.7 #constrained bond
+bond_coeff   73        100      3.1 #constrained bond
+bond_coeff   74        100     2.65 #constrained bond
+bond_coeff   75        100     2.65 #constrained bond
+bond_coeff   76        100      2.7 #constrained bond
+bond_coeff   77        100      2.7 #constrained bond
+bond_coeff   78        100      2.7 #constrained bond
+bond_coeff   79        100      2.6 #constrained bond
+bond_coeff   80        100      2.7 #constrained bond
+bond_coeff   81        100      2.7 #constrained bond
+bond_coeff   82        100      2.7 #constrained bond
+bond_coeff   83        100      2.6 #constrained bond
+bond_coeff   84        100     2.65 #constrained bond
+bond_coeff   85        100      2.6 #constrained bond
+bond_coeff   86        100      2.6 #constrained bond
+bond_coeff   87        100      2.6 #constrained bond
+bond_coeff   88        100      3.1 #constrained bond
+bond_coeff   89        100      3.1 #constrained bond
+bond_coeff   90        100      2.7 #constrained bond
+bond_coeff   91        100      2.7 #constrained bond
+bond_coeff   92        100      2.7 #constrained bond
+bond_coeff   93        100     2.65 #constrained bond
+bond_coeff   94        250      1.4
+bond_coeff   95        250      1.4
+bond_coeff   96          0      1.4
+bond_coeff   97 11.950286805     3.53 #Q0-SC2-11.950286805-3.53
+bond_coeff   98 23.90057361      3.6 #Q0-SN0-23.90057361-3.6
+bond_coeff   99 95.60229444     1.98 #SC2-SN0-95.60229444-1.98
+bond_coeff  100 35.850860415      2.7 #SC2-TN0-35.850860415-2.7
+bond_coeff  101 35.850860415        3 #SC2-TN0-35.850860415-3
+bond_coeff  102 23.90057361     3.26 #TA2-TNa-23.90057361-3.26
+bond_coeff  103 23.90057361     3.89 #TG2-TNa-23.90057361-3.89
+bond_coeff  104        100     2.29 #constrained bond
+bond_coeff  105        100     2.66 #constrained bond
+bond_coeff  106        100     2.88 #constrained bond
+bond_coeff  107        100     1.62 #constrained bond
+bond_coeff  108        100     2.17 #constrained bond
+bond_coeff  109        100     3.22 #constrained bond
+bond_coeff  110        100     2.65 #constrained bond
+bond_coeff  111        100     2.29 #constrained bond
+bond_coeff  112        100     2.66 #constrained bond
+bond_coeff  113        100     2.88 #constrained bond
+bond_coeff  114        100     1.62 #constrained bond
+bond_coeff  115        100      2.2 #constrained bond
+bond_coeff  116        100     2.85 #constrained bond
+bond_coeff  117        100     2.68 #constrained bond
+bond_coeff  118        100      2.2 #constrained bond
+bond_coeff  119        100     2.85 #constrained bond
+bond_coeff  120        100     2.68 #constrained bond
+bond_coeff  121        100     2.29 #constrained bond
+bond_coeff  122        100     2.66 #constrained bond
+bond_coeff  123        100     2.88 #constrained bond
+bond_coeff  124        100     1.62 #constrained bond
+bond_coeff  125        100     2.95 #constrained bond
+bond_coeff  126        100     2.95 #constrained bond
+bond_coeff  127        100     2.85 #constrained bond
+bond_coeff  128        100     1.61 #constrained bond
+bond_coeff  129        100      2.2 #constrained bond
+bond_coeff  130        100     2.85 #constrained bond
+bond_coeff  131        100     2.68 #constrained bond
+bond_coeff  132        100     2.17 #constrained bond
+bond_coeff  133        100     3.22 #constrained bond
+bond_coeff  134        100     2.65 #constrained bond
+bond_coeff  135        100     2.17 #constrained bond
+bond_coeff  136        100     3.22 #constrained bond
+bond_coeff  137        100     2.65 #constrained bond
+bond_coeff  138        0.0      2.5 #for fake bond
+
+angle_style hybrid harmonic cosine/squared
+
+angle_coeff    1   cosine/squared 2.98757170125        100 #AC1-P5-P4-2-2.98757170125-100
+angle_coeff    2   cosine/squared 2.98757170125        100 #AC1-P5-P5-2-2.98757170125-100
+angle_coeff    3   cosine/squared 2.98757170125        100 #AC1-P5-Qd-2-2.98757170125-100
+angle_coeff    4   cosine/squared 2.98757170125        100 #AC1-Qd-P5-2-2.98757170125-100
+angle_coeff    5   cosine/squared 2.98757170125        100 #AC2-P5-P4-2-2.98757170125-100
+angle_coeff    6   cosine/squared 2.98757170125        100 #AC2-P5-P5-2-2.98757170125-100
+angle_coeff    7   cosine/squared 2.98757170125        100 #AC2-Qa-P5-2-2.98757170125-100
+angle_coeff    8   cosine/squared 2.98757170125        100 #C3-P4-P5-2-2.98757170125-100
+angle_coeff    9   cosine/squared 2.98757170125        100 #C3-P5-P4-2-2.98757170125-100
+angle_coeff   10   cosine/squared 2.98757170125        100 #C3-P5-P5-2-2.98757170125-100
+angle_coeff   11   cosine/squared 2.98757170125        100 #C5-P5-P4-2-2.98757170125-100
+angle_coeff   12   cosine/squared 2.98757170125        100 #C5-P5-P5-2-2.98757170125-100
+angle_coeff   13   cosine/squared 2.98757170125        100 #N0-P5-P5-2-2.98757170125-100
+angle_coeff   14   cosine/squared 2.98757170125        100 #P1-P5-P4-2-2.98757170125-100
+angle_coeff   15   cosine/squared 2.98757170125        100 #P1-P5-P5-2-2.98757170125-100
+angle_coeff   16   cosine/squared 2.98757170125        100 #P4-P5-P4-2-2.98757170125-100
+angle_coeff   17   cosine/squared 2.390057361        127 #P4-P5-P5-2-2.390057361-127
+angle_coeff   18   cosine/squared 2.98757170125        100 #P4-P5-P5-2-2.98757170125-100
+angle_coeff   19   cosine/squared 2.98757170125        180 #P5-C3-Qd-2-2.98757170125-180
+angle_coeff   20   cosine/squared 2.98757170125        180 #P5-N0-Qd-2-2.98757170125-180
+angle_coeff   21   cosine/squared 2.390057361        127 #P5-P4-P5-2-2.390057361-127
+angle_coeff   22   cosine/squared 2.390057361        127 #P5-P5-P5-2-2.390057361-127
+angle_coeff   23   cosine/squared 2.98757170125        100 #P5-P5-P5-2-2.98757170125-100
+angle_coeff   24   cosine/squared 2.390057361        127 #P5-P5-Qa-2-2.390057361-127
+angle_coeff   25   cosine/squared 2.98757170125        100 #P5-P5-Qa-2-2.98757170125-100
+angle_coeff   26   cosine/squared 2.390057361        127 #P5-P5-Qd-2-2.390057361-127
+angle_coeff   27   cosine/squared 2.98757170125        100 #P5-P5-SC4-2-2.98757170125-100
+angle_coeff   28   cosine/squared 2.98757170125        100 #P5-P5-SC5-2-2.98757170125-100
+angle_coeff   29   cosine/squared 5.9751434025        150 #P5-SC4-SC4-2-5.9751434025-150
+angle_coeff   30   cosine/squared 5.9751434025         90 #P5-SC4-SC5-2-5.9751434025-90
+angle_coeff   31   cosine/squared 5.9751434025        210 #P5-SC4-SNd-2-5.9751434025-210
+angle_coeff   32   cosine/squared 5.9751434025        150 #P5-SC4-SP1-2-5.9751434025-150
+angle_coeff   33   cosine/squared 5.9751434025        150 #P5-SC5-SC5-2-5.9751434025-150
+angle_coeff   34   cosine/squared 0.5019120456        0.0
+angle_coeff   35   cosine/squared 17.9254302075  102.00000 #Q0-SC2-SN0-2-17.9254302075-102.00000
+angle_coeff   36         harmonic 3.5850860415  180.00000 #Q0-SC2-TN0-1-3.5850860415-180.00000
+angle_coeff   37   cosine/squared 17.9254302075  157.00000 #Q0-SC2-TN0-2-17.9254302075-157.00000
+angle_coeff   38   cosine/squared 23.90057361  158.00000 #Q0-SC2-TN0-2-23.90057361-158.00000
+angle_coeff   39   cosine/squared 23.90057361  110.00000 #Q0-SN0-SC2-2-23.90057361-110.00000
+angle_coeff   40   cosine/squared 8.96271510375  106.00000 #SC2-Q0-SN0-2-8.96271510375-106.00000
+angle_coeff   41   cosine/squared 23.90057361  160.00000 #SC2-TN0-TA2-2-23.90057361-160.00000
+angle_coeff   42   cosine/squared 35.850860415  137.00000 #SC2-TN0-TG2-2-35.850860415-137.00000
+angle_coeff   43   cosine/squared 23.90057361  140.00000 #SC2-TN0-TNa-2-23.90057361-140.00000
+angle_coeff   44   cosine/squared 29.8757170125  130.00000 #SC2-TN0-TNa-2-29.8757170125-130.00000
+angle_coeff   45   cosine/squared 35.850860415  107.00000 #SC2-TN0-TT2-2-35.850860415-107.00000
+angle_coeff   46   cosine/squared 35.850860415   95.00000 #SC2-TN0-TY2-2-35.850860415-95.00000
+angle_coeff   47   cosine/squared 25.0956022905   95.00000 #SN0-SC2-TN0-2-25.0956022905-95.00000
+angle_coeff   48   cosine/squared 26.290630971   92.00000 #SN0-SC2-TN0-2-26.290630971-92.00000
+angle_coeff   49   cosine/squared 29.8757170125   94.00000 #SN0-SC2-TN0-2-29.8757170125-94.00000
+angle_coeff   50   cosine/squared 29.8757170125   94.50000 #SN0-SC2-TN0-2-29.8757170125-94.50000
+angle_coeff   51         harmonic 47.80114722  145.00000 #SN0-TN0-TT3-1-47.80114722-145.00000
+angle_coeff   52         harmonic 59.751434025  150.00000 #SN0-TN0-TY3-1-59.751434025-150.00000
+angle_coeff   53         harmonic 23.90057361   74.00000 #TA2-TA3-TNa-1-23.90057361-74.00000
+angle_coeff   54         harmonic 23.90057361  125.00000 #TA2-TN0-TNa-1-23.90057361-125.00000
+angle_coeff   55         harmonic 23.90057361   85.00000 #TA3-TA2-TN0-1-23.90057361-85.00000
+angle_coeff   56         harmonic 23.90057361   98.00000 #TA3-TNa-TN0-1-23.90057361-98.00000
+angle_coeff   57         harmonic 23.90057361   84.00000 #TG2-TG3-TNa-1-23.90057361-84.00000
+angle_coeff   58         harmonic 23.90057361  125.00000 #TG2-TN0-TNa-1-23.90057361-125.00000
+angle_coeff   59         harmonic 23.90057361   69.50000 #TG3-TG2-TN0-1-23.90057361-69.50000
+angle_coeff   60         harmonic 23.90057361   94.00000 #TG3-TNa-TN0-1-23.90057361-94.00000
+angle_coeff   61         harmonic 11.950286805   55.00000 #TN0-TT2-TT3-1-11.950286805-55.00000
+angle_coeff   62         harmonic 11.950286805   42.00000 #TN0-TT3-TT2-1-11.950286805-42.00000
+angle_coeff   63         harmonic 23.90057361   61.00000 #TN0-TY2-TY3-1-23.90057361-61.00000
+angle_coeff   64         harmonic 23.90057361   47.00000 #TN0-TY3-TY2-1-23.90057361-47.00000
+angle_coeff   65         harmonic 11.950286805   83.00000 #TT2-TN0-TT3-1-11.950286805-83.00000
+angle_coeff   66         harmonic 23.90057361   71.00000 #TY2-TN0-TY3-1-23.90057361-71.00000
+
+dihedral_style fourier
+
+dihedral_coeff    1    2 0.4780114722  2   85.00000 0.4780114722   3 160.00000 #SC2-Q0-SN0-SC2-15-20-21-22
+dihedral_coeff    2    2 0.4780114722  2   85.00000 0.4780114722   3 160.00000 #SC2-Q0-SN0-SC2-2-7-8-9
+dihedral_coeff    3    2 0.4780114722  2   85.00000 0.4780114722   3 160.00000 #SC2-Q0-SN0-SC2-22-26-27-28
+dihedral_coeff    4    2 0.4780114722  2   85.00000 0.4780114722   3 160.00000 #SC2-Q0-SN0-SC2-28-32-33-34
+dihedral_coeff    5    2 0.4780114722  2   85.00000 0.4780114722   3 160.00000 #SC2-Q0-SN0-SC2-34-39-40-41
+dihedral_coeff    6    2 0.4780114722  2   85.00000 0.4780114722   3 160.00000 #SC2-Q0-SN0-SC2-41-46-47-48
+dihedral_coeff    7    2 0.4780114722  2   85.00000 0.4780114722   3 160.00000 #SC2-Q0-SN0-SC2-48-52-53-54
+dihedral_coeff    8    2 0.4780114722  2   85.00000 0.4780114722   3 160.00000 #SC2-Q0-SN0-SC2-54-58-59-60
+dihedral_coeff    9    2 0.4780114722  2   85.00000 0.4780114722   3 160.00000 #SC2-Q0-SN0-SC2-9-13-14-15
+dihedral_coeff   10    1 0.4780114722  3  180.00000 #SN0-SC2-Q0-SN0-1-0.4780114722-3 -180.00000
+
+improper_style harmonic
+
+improper_coeff    1 5.9751434025          0 #P5-SC4-SP1-SC4-2-5.9751434025-0
+improper_coeff    2 5.9751434025          0 #P5-SC5-SC5-SC5-2-5.9751434025-0
+improper_coeff    3 5.9751434025          0 #P5-SNd-SC5-SC4-2-5.9751434025-0
+improper_coeff    4 5.9751434025          0 #P5-SP1-SP1-SC4-2-5.9751434025-0
+improper_coeff    5 23.90057361          0 #SC4-SNd-SC5-SC5-2-23.90057361-0
+improper_coeff    6 2.98757170125         95 #Q0-SN0-SC2-Q0-2-2.98757170125-95
+improper_coeff    7 2.390057361         90 #Q0-SN0-SC2-TN0-2-2.390057361-90
+improper_coeff    8 2.98757170125         78 #Q0-SN0-SC2-TN0-2-2.98757170125-78
+improper_coeff    9 4.780114722         75 #Q0-SN0-SC2-TN0-2-4.780114722-75
+improper_coeff   10 7.76768642325        145 #SC2-SN0-TN0-TT3-2-7.76768642325-145
+improper_coeff   11 5.9751434025        142 #SC2-SN0-TN0-TY3-2-5.9751434025-142
+improper_coeff   12 0.059751434025        116 #SN0-SC2-TN0-TA2-2-0.059751434025-116
+improper_coeff   13 0.11950286805        117 #SN0-SC2-TN0-TG2-2-0.11950286805-117
+improper_coeff   14 1.79254302075         92 #SN0-SC2-TN0-TNa-2-1.79254302075-92
+improper_coeff   15 1.79254302075         98 #SN0-SC2-TN0-TNa-2-1.79254302075-98
+improper_coeff   16 1.79254302075        110 #SN0-SC2-TN0-TT2-2-1.79254302075-110
+improper_coeff   17 2.390057361         90 #SN0-SC2-TN0-TY2-2-2.390057361-90
+
+pair_style hybrid lj/gromacs/coul/gromacs 9.0 12.0  0.0 12.0 #lj/gromacs 9.0 12.0
+
+#pair_coeff  	* 	* 	 lj/gromacs 				0.0000 	0.2 	0.1 	0.5
+pair_coeff  	* 	* 	 lj/gromacs/coul/gromacs	0.0000 	0.10
+pair_coeff		1   1    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C1 C1
+pair_coeff		1   2    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C1 C2
+pair_coeff		1   3    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C1 C3
+pair_coeff		1   4    lj/gromacs/coul/gromacs	0.7409  4.7000 	# C1 C5
+pair_coeff		1   5    lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 N0
+pair_coeff		1   6    lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 P1
+pair_coeff		1   7    lj/gromacs/coul/gromacs	0.4780  4.7000 	# C1 P4
+pair_coeff		1   8    lj/gromacs/coul/gromacs	0.4780  4.7000 	# C1 P5
+pair_coeff		1   9    lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 Qa
+pair_coeff		1   10   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 Qd
+pair_coeff		1   11   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C1 SC4
+pair_coeff		1   12   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C1 SC5
+pair_coeff		1   13   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 SNd
+pair_coeff		1   14   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 SP1
+pair_coeff		1   15   lj/gromacs/coul/gromacs	0.4541  4.7000 	# C1 POL
+pair_coeff		1   18   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 Qa
+pair_coeff		1   19   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 Qd
+pair_coeff		1   20   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 Q0
+pair_coeff		1   21   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C1 SC2
+pair_coeff		1   22   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 SN0
+pair_coeff		1   23   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TA2
+pair_coeff		1   24   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TA3
+pair_coeff		1   25   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TG2
+pair_coeff		1   26   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 TG3
+pair_coeff		1   27   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TN0
+pair_coeff		1   28   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TNa
+pair_coeff		1   29   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 TT2
+pair_coeff		1   30   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TT3
+pair_coeff		1   31   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 TY2
+pair_coeff		1   32   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TY3
+pair_coeff		2   2    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C2 C2
+pair_coeff		2   3    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C2 C3
+pair_coeff		2   4    lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 C5
+pair_coeff		2   5    lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 N0
+pair_coeff		2   6    lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 P1
+pair_coeff		2   7    lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 P4
+pair_coeff		2   8    lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 P5
+pair_coeff		2   9    lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 Qa
+pair_coeff		2   10   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 Qd
+pair_coeff		2   11   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 SC4
+pair_coeff		2   12   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 SC5
+pair_coeff		2   13   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C2 SNd
+pair_coeff		2   14   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 SP1
+pair_coeff		2   15   lj/gromacs/coul/gromacs	0.5222  4.7000 	# C2 POL
+pair_coeff		2   18   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 Qa
+pair_coeff		2   19   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 Qd
+pair_coeff		2   20   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 Q0
+pair_coeff		2   21   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C2 SC2
+pair_coeff		2   22   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 SN0
+pair_coeff		2   23   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 TA2
+pair_coeff		2   24   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 TA3
+pair_coeff		2   25   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 TG2
+pair_coeff		2   26   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C2 TG3
+pair_coeff		2   27   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 TN0
+pair_coeff		2   28   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C2 TNa
+pair_coeff		2   29   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C2 TT2
+pair_coeff		2   30   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C2 TT3
+pair_coeff		2   31   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C2 TY2
+pair_coeff		2   32   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 TY3
+pair_coeff		3   3    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 C3
+pair_coeff		3   4    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 C5
+pair_coeff		3   5    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 N0
+pair_coeff		3   6    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 P1
+pair_coeff		3   7    lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 P4
+pair_coeff		3   8    lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 P5
+pair_coeff		3   9    lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 Qa
+pair_coeff		3   10   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 Qd
+pair_coeff		3   11   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 SC4
+pair_coeff		3   12   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 SC5
+pair_coeff		3   13   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 SNd
+pair_coeff		3   14   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 SP1
+pair_coeff		3   15   lj/gromacs/coul/gromacs	0.6130  4.7000 	# C3 POL
+pair_coeff		3   18   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 Qa
+pair_coeff		3   19   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 Qd
+pair_coeff		3   20   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 Q0
+pair_coeff		3   21   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 SC2
+pair_coeff		3   22   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 SN0
+pair_coeff		3   23   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 TA2
+pair_coeff		3   24   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 TA3
+pair_coeff		3   25   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 TG2
+pair_coeff		3   26   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C3 TG3
+pair_coeff		3   27   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 TN0
+pair_coeff		3   28   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 TNa
+pair_coeff		3   29   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C3 TT2
+pair_coeff		3   30   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 TT3
+pair_coeff		3   31   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C3 TY2
+pair_coeff		3   32   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 TY3
+pair_coeff		4   4    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 C5
+pair_coeff		4   5    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 N0
+pair_coeff		4   6    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 P1
+pair_coeff		4   7    lj/gromacs/coul/gromacs	0.7409  4.7000 	# C5 P4
+pair_coeff		4   8    lj/gromacs/coul/gromacs	0.7409  4.7000 	# C5 P5
+pair_coeff		4   9    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 Qa
+pair_coeff		4   10   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 Qd
+pair_coeff		4   11   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 SC4
+pair_coeff		4   12   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 SC5
+pair_coeff		4   13   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 SNd
+pair_coeff		4   14   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 SP1
+pair_coeff		4   15   lj/gromacs/coul/gromacs	0.7039  4.7000 	# C5 POL
+pair_coeff		4   18   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 Qa
+pair_coeff		4   19   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 Qd
+pair_coeff		4   20   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 Q0
+pair_coeff		4   21   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C5 SC2
+pair_coeff		4   22   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 SN0
+pair_coeff		4   23   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TA2
+pair_coeff		4   24   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TA3
+pair_coeff		4   25   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TG2
+pair_coeff		4   26   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TG3
+pair_coeff		4   27   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TN0
+pair_coeff		4   28   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TNa
+pair_coeff		4   29   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TT2
+pair_coeff		4   30   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TT3
+pair_coeff		4   31   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TY2
+pair_coeff		4   32   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TY3
+pair_coeff		5   5    lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 N0
+pair_coeff		5   6    lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 P1
+pair_coeff		5   7    lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 P4
+pair_coeff		5   8    lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 P5
+pair_coeff		5   9    lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 Qa
+pair_coeff		5   10   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 Qd
+pair_coeff		5   11   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 SC4
+pair_coeff		5   12   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 SC5
+pair_coeff		5   13   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 SNd
+pair_coeff		5   14   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 SP1
+pair_coeff		5   15   lj/gromacs/coul/gromacs	0.7947  4.7000 	# N0 POL
+pair_coeff		5   18   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 Qa
+pair_coeff		5   19   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 Qd
+pair_coeff		5   20   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 Q0
+pair_coeff		5   21   lj/gromacs/coul/gromacs	0.7409  4.7000 	# N0 SC2
+pair_coeff		5   22   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 SN0
+pair_coeff		5   23   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 TA2
+pair_coeff		5   24   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 TA3
+pair_coeff		5   25   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 TG2
+pair_coeff		5   26   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 TG3
+pair_coeff		5   27   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 TN0
+pair_coeff		5   28   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 TNa
+pair_coeff		5   29   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 TT2
+pair_coeff		5   30   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 TT3
+pair_coeff		5   31   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 TY2
+pair_coeff		5   32   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 TY3
+pair_coeff		6   6    lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 P1
+pair_coeff		6   7    lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 P4
+pair_coeff		6   8    lj/gromacs/coul/gromacs	1.3384  4.7000 	# P1 P5
+pair_coeff		6   9    lj/gromacs/coul/gromacs	1.3384  4.7000 	# P1 Qa
+pair_coeff		6   10   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P1 Qd
+pair_coeff		6   11   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P1 SC4
+pair_coeff		6   12   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P1 SC5
+pair_coeff		6   13   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 SNd
+pair_coeff		6   14   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 SP1
+pair_coeff		6   15   lj/gromacs/coul/gromacs	1.0217  4.7000 	# P1 POL
+pair_coeff		6   18   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P1 Qa
+pair_coeff		6   19   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P1 Qd
+pair_coeff		6   20   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 Q0
+pair_coeff		6   21   lj/gromacs/coul/gromacs	0.7409  4.7000 	# P1 SC2
+pair_coeff		6   22   lj/gromacs/coul/gromacs	0.9560  4.7000 	# P1 SN0
+pair_coeff		6   23   lj/gromacs/coul/gromacs	0.9560  4.7000 	# P1 TA2
+pair_coeff		6   24   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TA3
+pair_coeff		6   25   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TG2
+pair_coeff		6   26   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TG3
+pair_coeff		6   27   lj/gromacs/coul/gromacs	0.9560  4.7000 	# P1 TN0
+pair_coeff		6   28   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TNa
+pair_coeff		6   29   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TT2
+pair_coeff		6   30   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TT3
+pair_coeff		6   31   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TY2
+pair_coeff		6   32   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TY3
+pair_coeff		7   7    lj/gromacs/coul/gromacs	1.1950  4.7000 	# P4 P4
+pair_coeff		7   8    lj/gromacs/coul/gromacs	1.3384  4.7000 	# P4 P5
+pair_coeff		7   9    lj/gromacs/coul/gromacs	1.3384  4.7000 	# P4 Qa
+pair_coeff		7   10   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P4 Qd
+pair_coeff		7   11   lj/gromacs/coul/gromacs	0.6453  4.7000 	# P4 SC4
+pair_coeff		7   12   lj/gromacs/coul/gromacs	0.7409  4.7000 	# P4 SC5
+pair_coeff		7   13   lj/gromacs/coul/gromacs	0.9560  4.7000 	# P4 SNd
+pair_coeff		7   14   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 SP1
+pair_coeff		7   15   lj/gromacs/coul/gromacs	1.1353  4.7000 	# P4 POL
+pair_coeff		7   18   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P4 Qa
+pair_coeff		7   19   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P4 Qd
+pair_coeff		7   20   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P4 Q0
+pair_coeff		7   21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# P4 SC2
+pair_coeff		7   22   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P4 SN0
+pair_coeff		7   23   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P4 TA2
+pair_coeff		7   24   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 TA3
+pair_coeff		7   25   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 TG2
+pair_coeff		7   26   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 TG3
+pair_coeff		7   27   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P4 TN0
+pair_coeff		7   28   lj/gromacs/coul/gromacs	0.9560  4.7000 	# P4 TNa
+pair_coeff		7   29   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 TT2
+pair_coeff		7   30   lj/gromacs/coul/gromacs	0.9560  4.7000 	# P4 TT3
+pair_coeff		7   31   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 TY2
+pair_coeff		7   32   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 TY3
+pair_coeff		8   8    lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 P5
+pair_coeff		8   9    lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 Qa
+pair_coeff		8   10   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 Qd
+pair_coeff		8   11   lj/gromacs/coul/gromacs	0.6453  4.7000 	# P5 SC4
+pair_coeff		8   12   lj/gromacs/coul/gromacs	0.7409  4.7000 	# P5 SC5
+pair_coeff		8   13   lj/gromacs/coul/gromacs	1.1950  4.7000 	# P5 SNd
+pair_coeff		8   14   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 SP1
+pair_coeff		8   15   lj/gromacs/coul/gromacs	1.2715  4.7000 	# P5 POL
+pair_coeff		8   18   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 Qa
+pair_coeff		8   19   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 Qd
+pair_coeff		8   20   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 Q0
+pair_coeff		8   21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# P5 SC2
+pair_coeff		8   22   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P5 SN0
+pair_coeff		8   23   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P5 TA2
+pair_coeff		8   24   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 TA3
+pair_coeff		8   25   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 TG2
+pair_coeff		8   26   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 TG3
+pair_coeff		8   27   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P5 TN0
+pair_coeff		8   28   lj/gromacs/coul/gromacs	1.1950  4.7000 	# P5 TNa
+pair_coeff		8   29   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 TT2
+pair_coeff		8   30   lj/gromacs/coul/gromacs	1.1950  4.7000 	# P5 TT3
+pair_coeff		8   31   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 TY2
+pair_coeff		8   32   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 TY3
+pair_coeff		9   9    lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qa Qa
+pair_coeff		9   10   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa Qd
+pair_coeff		9   11   lj/gromacs/coul/gromacs	0.7409  4.7000 	# Qa SC4
+pair_coeff		9   12   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qa SC5
+pair_coeff		9   13   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa SNd
+pair_coeff		9   14   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa SP1
+pair_coeff		9   15   lj/gromacs/coul/gromacs	1.1950  4.7000 	# Qa POL
+pair_coeff		9   18   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qa Qa
+pair_coeff		9   19   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa Qd
+pair_coeff		9   20   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qa Q0
+pair_coeff		9   21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qa SC2
+pair_coeff		9   22   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa SN0
+pair_coeff		9   23   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa TA2
+pair_coeff		9   24   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TA3
+pair_coeff		9   25   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TG2
+pair_coeff		9   26   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TG3
+pair_coeff		9   27   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa TN0
+pair_coeff		9   28   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Qa TNa
+pair_coeff		9   29   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TT2
+pair_coeff		9   30   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Qa TT3
+pair_coeff		9   31   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TY2
+pair_coeff		9   32   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TY3
+pair_coeff		10  10   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qd Qd
+pair_coeff		10  11   lj/gromacs/coul/gromacs	0.7409  4.7000 	# Qd SC4
+pair_coeff		10  12   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qd SC5
+pair_coeff		10  13   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Qd SNd
+pair_coeff		10  14   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd SP1
+pair_coeff		10  15   lj/gromacs/coul/gromacs	1.1950  4.7000 	# Qd POL
+pair_coeff		10  18   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd Qa
+pair_coeff		10  19   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qd Qd
+pair_coeff		10  20   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qd Q0
+pair_coeff		10  21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qd SC2
+pair_coeff		10  22   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd SN0
+pair_coeff		10  23   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd TA2
+pair_coeff		10  24   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TA3
+pair_coeff		10  25   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TG2
+pair_coeff		10  26   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TG3
+pair_coeff		10  27   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd TN0
+pair_coeff		10  28   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TNa
+pair_coeff		10  29   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TT2
+pair_coeff		10  30   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TT3
+pair_coeff		10  31   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TY2
+pair_coeff		10  32   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TY3
+pair_coeff		11  11   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 SC4
+pair_coeff		11  12   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 SC5
+pair_coeff		11  13   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC4 SNd
+pair_coeff		11  14   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 SP1
+pair_coeff		11  15   lj/gromacs/coul/gromacs	0.6130  4.7000 	# SC4 POL
+pair_coeff		11  18   lj/gromacs/coul/gromacs	0.7409  4.7000 	# SC4 Qa
+pair_coeff		11  19   lj/gromacs/coul/gromacs	0.7409  4.7000 	# SC4 Qd
+pair_coeff		11  20   lj/gromacs/coul/gromacs	0.7409  4.7000 	# SC4 Q0
+pair_coeff		11  21   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC4 SC2
+pair_coeff		11  22   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 SN0
+pair_coeff		11  23   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TA2
+pair_coeff		11  24   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TA3
+pair_coeff		11  25   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TG2
+pair_coeff		11  26   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TG3
+pair_coeff		11  27   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TN0
+pair_coeff		11  28   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC4 TNa
+pair_coeff		11  29   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TT2
+pair_coeff		11  30   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC4 TT3
+pair_coeff		11  31   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TY2
+pair_coeff		11  32   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TY3
+pair_coeff		12  12   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 SC5
+pair_coeff		12  13   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 SNd
+pair_coeff		12  14   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 SP1
+pair_coeff		12  15   lj/gromacs/coul/gromacs	0.7039  4.7000 	# SC5 POL
+pair_coeff		12  18   lj/gromacs/coul/gromacs	0.8365  4.7000 	# SC5 Qa
+pair_coeff		12  19   lj/gromacs/coul/gromacs	0.8365  4.7000 	# SC5 Qd
+pair_coeff		12  20   lj/gromacs/coul/gromacs	0.8365  4.7000 	# SC5 Q0
+pair_coeff		12  21   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC5 SC2
+pair_coeff		12  22   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 SN0
+pair_coeff		12  23   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TA2
+pair_coeff		12  24   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TA3
+pair_coeff		12  25   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TG2
+pair_coeff		12  26   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TG3
+pair_coeff		12  27   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TN0
+pair_coeff		12  28   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TNa
+pair_coeff		12  29   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TT2
+pair_coeff		12  30   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TT3
+pair_coeff		12  31   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TY2
+pair_coeff		12  32   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TY3
+pair_coeff		13  13   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SNd SNd
+pair_coeff		13  14   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd SP1
+pair_coeff		13  15   lj/gromacs/coul/gromacs	0.9082  4.7000 	# SNd POL
+pair_coeff		13  18   lj/gromacs/coul/gromacs	1.3384  4.7000 	# SNd Qa
+pair_coeff		13  19   lj/gromacs/coul/gromacs	1.0755  4.7000 	# SNd Qd
+pair_coeff		13  20   lj/gromacs/coul/gromacs	1.0755  4.7000 	# SNd Q0
+pair_coeff		13  21   lj/gromacs/coul/gromacs	0.4840  4.3000 	# SNd SC2
+pair_coeff		13  22   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SNd SN0
+pair_coeff		13  23   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SNd TA2
+pair_coeff		13  24   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TA3
+pair_coeff		13  25   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TG2
+pair_coeff		13  26   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TG3
+pair_coeff		13  27   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SNd TN0
+pair_coeff		13  28   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TNa
+pair_coeff		13  29   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TT2
+pair_coeff		13  30   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TT3
+pair_coeff		13  31   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TY2
+pair_coeff		13  32   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TY3
+pair_coeff		14  14   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 SP1
+pair_coeff		14  15   lj/gromacs/coul/gromacs	1.0217  4.7000 	# SP1 POL
+pair_coeff		14  18   lj/gromacs/coul/gromacs	1.3384  4.7000 	# SP1 Qa
+pair_coeff		14  19   lj/gromacs/coul/gromacs	1.3384  4.7000 	# SP1 Qd
+pair_coeff		14  20   lj/gromacs/coul/gromacs	1.0755  4.7000 	# SP1 Q0
+pair_coeff		14  21   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SP1 SC2
+pair_coeff		14  22   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SP1 SN0
+pair_coeff		14  23   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SP1 TA2
+pair_coeff		14  24   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TA3
+pair_coeff		14  25   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TG2
+pair_coeff		14  26   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TG3
+pair_coeff		14  27   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SP1 TN0
+pair_coeff		14  28   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TNa
+pair_coeff		14  29   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TT2
+pair_coeff		14  30   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TT3
+pair_coeff		14  31   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TY2
+pair_coeff		14  32   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TY3
+pair_coeff		15  15   lj/gromacs/coul/gromacs	0.9560  4.7000 	# POL POL
+pair_coeff		15  18   lj/gromacs/coul/gromacs	1.1950  4.7000 	# POL Qa
+pair_coeff		15  19   lj/gromacs/coul/gromacs	1.1950  4.7000 	# POL Qd
+pair_coeff		15  20   lj/gromacs/coul/gromacs	1.0755  4.7000 	# POL Q0
+pair_coeff		15  21   lj/gromacs/coul/gromacs	0.5222  4.7000 	# POL SC2
+pair_coeff		15  22   lj/gromacs/coul/gromacs	0.7947  4.7000 	# POL SN0
+pair_coeff		15  23   lj/gromacs/coul/gromacs	0.7947  4.7000 	# POL TA2
+pair_coeff		15  24   lj/gromacs/coul/gromacs	1.0217  4.7000 	# POL TA3
+pair_coeff		15  25   lj/gromacs/coul/gromacs	1.0217  4.7000 	# POL TG2
+pair_coeff		15  26   lj/gromacs/coul/gromacs	1.0217  4.7000 	# POL TG3
+pair_coeff		15  27   lj/gromacs/coul/gromacs	0.7947  4.7000 	# POL TN0
+pair_coeff		15  28   lj/gromacs/coul/gromacs	0.9082  4.7000 	# POL TNa
+pair_coeff		15  29   lj/gromacs/coul/gromacs	1.0217  4.7000 	# POL TT2
+pair_coeff		15  30   lj/gromacs/coul/gromacs	0.9082  4.7000 	# POL TT3
+pair_coeff		15  31   lj/gromacs/coul/gromacs	1.0217  4.7000 	# POL TY2
+pair_coeff		15  32   lj/gromacs/coul/gromacs	1.0217  4.7000 	# POL TY3
+pair_coeff		18  18   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qa Qa
+pair_coeff		18  19   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa Qd
+pair_coeff		18  20   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qa Q0
+pair_coeff		18  21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qa SC2
+pair_coeff		18  22   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa SN0
+pair_coeff		18  23   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa TA2
+pair_coeff		18  24   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TA3
+pair_coeff		18  25   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TG2
+pair_coeff		18  26   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TG3
+pair_coeff		18  27   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa TN0
+pair_coeff		18  28   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Qa TNa
+pair_coeff		18  29   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TT2
+pair_coeff		18  30   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Qa TT3
+pair_coeff		18  31   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TY2
+pair_coeff		18  32   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TY3
+pair_coeff		19  19   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qd Qd
+pair_coeff		19  20   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qd Q0
+pair_coeff		19  21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qd SC2
+pair_coeff		19  22   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd SN0
+pair_coeff		19  23   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd TA2
+pair_coeff		19  24   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TA3
+pair_coeff		19  25   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TG2
+pair_coeff		19  26   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TG3
+pair_coeff		19  27   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd TN0
+pair_coeff		19  28   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TNa
+pair_coeff		19  29   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TT2
+pair_coeff		19  30   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TT3
+pair_coeff		19  31   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TY2
+pair_coeff		19  32   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TY3
+pair_coeff		20  20   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Q0 Q0
+pair_coeff		20  21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Q0 SC2
+pair_coeff		20  22   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Q0 SN0
+pair_coeff		20  23   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Q0 TA2
+pair_coeff		20  24   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Q0 TA3
+pair_coeff		20  25   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Q0 TG2
+pair_coeff		20  26   lj/gromacs/coul/gromacs	1.1950  4.7000 	# Q0 TG3
+pair_coeff		20  27   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Q0 TN0
+pair_coeff		20  28   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Q0 TNa
+pair_coeff		20  29   lj/gromacs/coul/gromacs	1.1950  4.7000 	# Q0 TT2
+pair_coeff		20  30   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Q0 TT3
+pair_coeff		20  31   lj/gromacs/coul/gromacs	1.1950  4.7000 	# Q0 TY2
+pair_coeff		20  32   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Q0 TY3
+pair_coeff		21  21   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC2 SC2
+pair_coeff		21  22   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC2 SN0
+pair_coeff		21  23   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC2 TA2
+pair_coeff		21  24   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC2 TA3
+pair_coeff		21  25   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC2 TG2
+pair_coeff		21  26   lj/gromacs/coul/gromacs	0.4840  4.3000 	# SC2 TG3
+pair_coeff		21  27   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC2 TN0
+pair_coeff		21  28   lj/gromacs/coul/gromacs	0.4840  4.3000 	# SC2 TNa
+pair_coeff		21  29   lj/gromacs/coul/gromacs	0.4840  4.3000 	# SC2 TT2
+pair_coeff		21  30   lj/gromacs/coul/gromacs	0.4840  4.3000 	# SC2 TT3
+pair_coeff		21  31   lj/gromacs/coul/gromacs	0.4840  4.3000 	# SC2 TY2
+pair_coeff		21  32   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC2 TY3
+pair_coeff		22  22   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SN0 SN0
+pair_coeff		22  23   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SN0 TA2
+pair_coeff		22  24   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SN0 TA3
+pair_coeff		22  25   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SN0 TG2
+pair_coeff		22  26   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SN0 TG3
+pair_coeff		22  27   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SN0 TN0
+pair_coeff		22  28   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SN0 TNa
+pair_coeff		22  29   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SN0 TT2
+pair_coeff		22  30   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SN0 TT3
+pair_coeff		22  31   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SN0 TY2
+pair_coeff		22  32   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SN0 TY3
+pair_coeff		23  23   lj/gromacs/coul/gromacs	0.5497  3.2000 	# TA2 TA2
+pair_coeff		23  24   lj/gromacs/coul/gromacs	0.6453  3.2000 	# TA2 TA3
+pair_coeff		23  25   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TA2 TG2
+pair_coeff		23  26   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TA2 TG3
+pair_coeff		23  27   lj/gromacs/coul/gromacs	0.6274  3.2000 	# TA2 TN0
+pair_coeff		23  28   lj/gromacs/coul/gromacs	0.6274  3.2000 	# TA2 TNa
+pair_coeff		23  29   lj/gromacs/coul/gromacs	1.1950  3.2000 	# TA2 TT2
+pair_coeff		23  30   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TA2 TT3
+pair_coeff		23  31   lj/gromacs/coul/gromacs	0.6453  3.2000 	# TA2 TY2
+pair_coeff		23  32   lj/gromacs/coul/gromacs	0.8365  3.2000 	# TA2 TY3
+pair_coeff		24  24   lj/gromacs/coul/gromacs	0.6453  3.2000 	# TA3 TA3
+pair_coeff		24  25   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TA3 TG2
+pair_coeff		24  26   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TA3 TG3
+pair_coeff		24  27   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TA3 TN0
+pair_coeff		24  28   lj/gromacs/coul/gromacs	0.8066  3.2000 	# TA3 TNa
+pair_coeff		24  29   lj/gromacs/coul/gromacs	1.0755  3.2000 	# TA3 TT2
+pair_coeff		24  30   lj/gromacs/coul/gromacs	1.1950  3.2000 	# TA3 TT3
+pair_coeff		24  31   lj/gromacs/coul/gromacs	0.8365  3.2000 	# TA3 TY2
+pair_coeff		24  32   lj/gromacs/coul/gromacs	0.6453  3.2000 	# TA3 TY3
+pair_coeff		25  25   lj/gromacs/coul/gromacs	0.4780  3.2000 	# TG2 TG2
+pair_coeff		25  26   lj/gromacs/coul/gromacs	0.4780  3.2000 	# TG2 TG3
+pair_coeff		25  27   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TG2 TN0
+pair_coeff		25  28   lj/gromacs/coul/gromacs	0.8066  3.2000 	# TG2 TNa
+pair_coeff		25  29   lj/gromacs/coul/gromacs	0.8365  3.2000 	# TG2 TT2
+pair_coeff		25  30   lj/gromacs/coul/gromacs	0.7409  3.2000 	# TG2 TT3
+pair_coeff		25  31   lj/gromacs/coul/gromacs	1.5535  3.2000 	# TG2 TY2
+pair_coeff		25  32   lj/gromacs/coul/gromacs	1.4818  3.2000 	# TG2 TY3
+pair_coeff		26  26   lj/gromacs/coul/gromacs	0.4780  3.2000 	# TG3 TG3
+pair_coeff		26  27   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TG3 TN0
+pair_coeff		26  28   lj/gromacs/coul/gromacs	0.8066  3.2000 	# TG3 TNa
+pair_coeff		26  29   lj/gromacs/coul/gromacs	0.7409  3.2000 	# TG3 TT2
+pair_coeff		26  30   lj/gromacs/coul/gromacs	0.8365  3.2000 	# TG3 TT3
+pair_coeff		26  31   lj/gromacs/coul/gromacs	1.4818  3.2000 	# TG3 TY2
+pair_coeff		26  32   lj/gromacs/coul/gromacs	1.5535  3.2000 	# TG3 TY3
+pair_coeff		27  27   lj/gromacs/coul/gromacs	0.6274  3.2000 	# TN0 TN0
+pair_coeff		27  28   lj/gromacs/coul/gromacs	0.6274  3.2000 	# TN0 TNa
+pair_coeff		27  29   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TN0 TT2
+pair_coeff		27  30   lj/gromacs/coul/gromacs	0.6274  3.2000 	# TN0 TT3
+pair_coeff		27  31   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TN0 TY2
+pair_coeff		27  32   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TN0 TY3
+pair_coeff		28  28   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TNa TNa
+pair_coeff		28  29   lj/gromacs/coul/gromacs	0.8066  3.2000 	# TNa TT2
+pair_coeff		28  30   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TNa TT3
+pair_coeff		28  31   lj/gromacs/coul/gromacs	0.8066  3.2000 	# TNa TY2
+pair_coeff		28  32   lj/gromacs/coul/gromacs	0.8066  3.2000 	# TNa TY3
+pair_coeff		29  29   lj/gromacs/coul/gromacs	1.0755  3.2000 	# TT2 TT2
+pair_coeff		29  30   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TT2 TT3
+pair_coeff		29  31   lj/gromacs/coul/gromacs	1.1950  3.2000 	# TT2 TY2
+pair_coeff		29  32   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TT2 TY3
+pair_coeff		30  30   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TT3 TT3
+pair_coeff		30  31   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TT3 TY2
+pair_coeff		30  32   lj/gromacs/coul/gromacs	1.1950  3.2000 	# TT3 TY3
+pair_coeff		31  31   lj/gromacs/coul/gromacs	0.8365  3.2000 	# TY2 TY2
+pair_coeff		31  32   lj/gromacs/coul/gromacs	0.6453  3.2000 	# TY2 TY3
+pair_coeff		32  32   lj/gromacs/coul/gromacs	0.8365  3.2000 	# TY3 TY3
+
+fix oldq all store/state 0 q	 # charge is non-zero , store charge for each atom
+variable q atom f_oldq 				 # q���@��array�A�x�s�Ҧ���l�q������T
+
+### Set type                  ###################
+### material_1 --> change 	  ###################
+### material_2 --> non_change ###################
+
+###################################  group  ##################################
+group Backbone molecule == 4												##
+29 atoms in group Backbone
+group Bases molecule == 3													##
+34 atoms in group Bases
+group ${material_1} molecule 4 3											##
+group DNA molecule 4 3											
+63 atoms in group DNA
+group ${material_2} molecule 2 1 											##
+group Cancer_Cell molecule 2 1 											
+258 atoms in group Cancer_Cell
+group water_ions molecule 	 15 19 18 										##
+6915 atoms in group water_ions
+group ${material_1}_water_ions molecule 4 3 15 19 18						##
+group DNA_water_ions molecule 4 3 15 19 18						
+6978 atoms in group DNA_water_ions
+##############################################################################
+
+#pair_modify 	shift yes #martini not uses shifted potential
+run_style respa 4 2 2 2  bond 1 angle 2 dihedral 3 pair 4 #�]�wtimestep���Ϊ��j�p�A�W�[�p��Ĳv
+Respa levels:
+  1 = bond
+  2 = angle
+  3 = dihedral improper
+  4 = pair kspace
+timestep ${timesize}
+timestep 10
+
+#free energy between material_1 and material_2
+compute m1m2E Bases group/group ${material_2} pair yes boundary no 		#�P��MLOOP
+compute m1m2E Bases group/group Cancer_Cell pair yes boundary no 		
+variable m1m2E equal c_m1m2E
+variable globalE_G equal 1e10				# assign a super large initial value to be replaced after the first big BH loop
+
+reset_timestep 0
+
+## no need to keep this xyz
+#shell cd ${FoldName}
+#	dump 10 all custom 1 ini.xyz id mol type q x y z ix iy iz
+#	run 0
+#	undump 10
+#shell cd ..
+
+#do the initial relaxation before doing STUN_BH loop
+print "doing system_opt.in"
+doing system_opt.in
+include system_opt.in
+#!!!!!fix 1 all box/relax iso 0. # if PBC is true, you should use this command.
+
+# The following is only for testing which optimzation method works for your current potential function.
+# You should do the test when you conduct this script first time. Then check the log file to keep the workable methods.
+############################################# Test begions
+
+#fix 123 ${material_2} spring/self 10.0
+#fix_modify 123 energy yes
+reset_timestep 0
+thermo 500
+thermo_style custom step temp etotal v_m1m2E c_m1m2E
+
+#min_style sd
+#minimize 0.0 ${forcecon} ${opt_step} ${opt_step}
+
+#min_style hftn
+#minimize 0.0 ${forcecon} ${opt_step} ${opt_step}
+
+#timestep ${timesize}
+min_style cg
+##minimize 0.0 1e-6 ${opt_step1} ${opt_step2} #1w~10w
+minimize 0.0 0.0 ${opt_step1} ${opt_step2} #1w~10w
+minimize 0.0 0.0 20000 ${opt_step2} 
+minimize 0.0 0.0 20000 20000 
+WARNING: Using 'neigh_modify every 1 delay 0 check yes' setting during minimization (../min.cpp:187)
+Hybrid pair style last /omp style lj/gromacs/coul/gromacs
+Last active /omp style is improper_style harmonic/omp
+Neighbor list info ...
+  update every 1 steps, delay 0 steps, check yes
+  max neighbors/atom: 5000, page size: 100000
+  master list distance cutoff = 14
+  ghost atom cutoff = 14
+  binsize = 7, bins = 10 11 9
+  2 neighbor lists, perpetual/occasional/extra = 1 1 0
+  (1) pair lj/gromacs/coul/gromacs, perpetual
+      attributes: half, newton on, omp
+      pair build: half/bin/newton/omp
+      stencil: half/bin/3d
+      bin: standard
+  (2) compute group/group, occasional, copy from (1)
+      attributes: half, newton on, omp
+      pair build: copy
+      stencil: none
+      bin: none
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Per MPI rank memory allocation (min/avg/max) = 36.38 | 36.38 | 36.38 Mbytes
+Step Temp TotEng v_m1m2E c_m1m2E 
+       0    238.91297   -13814.256    -119.5409    -119.5409 
+     500    238.91297   -21167.295   -125.45524   -125.45524 
+    1000    238.91297   -21448.685   -124.89267   -124.89267 
+    1500    238.91297   -21609.504   -123.79118   -123.79118 
+    2000    238.91297   -21709.576   -123.83834   -123.83834 
+    2500    238.91297   -21772.126    -123.5555    -123.5555 
+    3000    238.91297   -21844.924   -123.70145   -123.70145 
+    3500    238.91297   -21892.755   -123.79434   -123.79434 
+    4000    238.91297    -21930.58   -123.89827   -123.89827 
+    4500    238.91297   -21967.954   -122.31278   -122.31278 
+    5000    238.91297   -21987.759   -123.46497   -123.46497 
+    5500    238.91297    -21990.61   -124.01136   -124.01136 
+    6000    238.91297   -22001.478   -123.32035   -123.32035 
+    6500    238.91297   -22002.803   -123.54065   -123.54065 
+    7000    238.91297   -22003.963   -123.68249   -123.68249 
+    7500    238.91297   -22004.385    -124.7369    -124.7369 
+    8000    238.91297   -22005.256   -124.88106   -124.88106 
+    8500    238.91297   -22008.573   -125.43691   -125.43691 
+    9000    238.91297   -22009.338   -125.39215   -125.39215 
+    9500    238.91297   -22018.281   -125.61062   -125.61062 
+   10000    238.91297   -22021.811   -126.02872   -126.02872 
+   10008    238.91297   -22021.943   -126.03747   -126.03747 
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Loop time of 66.3598 on 12 procs for 10008 steps with 7236 atoms
+
+1197.8% CPU use with 1 MPI tasks x 12 OpenMP threads
+
+Minimization stats:
+  Stopping criterion = max force evaluations
+  Energy initial, next-to-last, final = 
+     -18966.6914627943  -27174.3615868015  -27174.3784730576
+  Force two-norm initial, final = 477.32155 3.5485000
+  Force max component initial, final = 34.980267 0.62872984
+  Final line search alpha, max atom move = 0.0057251126 0.0035995491
+  Iterations, force evaluations = 10008 20001
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 58.988     | 58.988     | 58.988     |   0.0 | 88.89
+Bond    | 1.9907     | 1.9907     | 1.9907     |   0.0 |  3.00
+Neigh   | 0.79658    | 0.79658    | 0.79658    |   0.0 |  1.20
+Comm    | 1.3733     | 1.3733     | 1.3733     |   0.0 |  2.07
+Output  | 0.005823   | 0.005823   | 0.005823   |   0.0 |  0.01
+Modify  | 0.7761     | 0.7761     | 0.7761     |   0.0 |  1.17
+Other   |            | 2.429      |            |       |  3.66
+
+Nlocal:        7236.00 ave        7236 max        7236 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:        14011.0 ave       14011 max       14011 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1.06875e+06 ave 1.06875e+06 max 1.06875e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1068747
+Ave neighs/atom = 147.69859
+Ave special neighs/atom = 2.0359315
+Neighbor list builds = 213
+Dangerous builds = 0
+
+reset_timestep 0
+timestep ${fire_timesize}
+timestep 50
+velocity all zero linear
+min_style fire/old
+minimize 0.0 0.0 ${fire_step} ${fire_step}
+minimize 0.0 0.0 1000 ${fire_step}
+minimize 0.0 0.0 1000 1000
+WARNING: Using 'neigh_modify every 1 delay 0 check yes' setting during minimization (../min.cpp:187)
+Hybrid pair style last /omp style lj/gromacs/coul/gromacs
+Last active /omp style is improper_style harmonic/omp
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Per MPI rank memory allocation (min/avg/max) = 39.48 | 39.48 | 39.48 Mbytes
+Step Temp TotEng v_m1m2E c_m1m2E 
+       0            0   -27174.378   -126.03747   -126.03747 
+     500 0.00043125226   -27174.924   -126.03234   -126.03234 
+    1000 9.2802781e-05   -27175.168   -126.02925   -126.02925 
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Loop time of 3.46117 on 12 procs for 1000 steps with 7236 atoms
+
+1197.6% CPU use with 1 MPI tasks x 12 OpenMP threads
+
+Minimization stats:
+  Stopping criterion = max iterations
+  Energy initial, next-to-last, final = 
+     -27174.3784730576  -27175.1702206324  -27175.1699000417
+  Force two-norm initial, final = 3.5485000 1.3140615
+  Force max component initial, final = 0.62872984 0.45423187
+  Final line search alpha, max atom move = 0.0000000 0.0000000
+  Iterations, force evaluations = 1000 1000
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 3.1141     | 3.1141     | 3.1141     |   0.0 | 89.97
+Bond    | 0.10362    | 0.10362    | 0.10362    |   0.0 |  2.99
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0.068071   | 0.068071   | 0.068071   |   0.0 |  1.97
+Output  | 0.00044486 | 0.00044486 | 0.00044486 |   0.0 |  0.01
+Modify  | 0.039093   | 0.039093   | 0.039093   |   0.0 |  1.13
+Other   |            | 0.1358     |            |       |  3.92
+
+Nlocal:        7236.00 ave        7236 max        7236 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:        14011.0 ave       14011 max       14011 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1.06875e+06 ave 1.06875e+06 max 1.06875e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1068746
+Ave neighs/atom = 147.69845
+Ave special neighs/atom = 2.0359315
+Neighbor list builds = 0
+Dangerous builds = 0
+
+#back to regular timestep size
+timestep ${timesize}
+timestep 10
+
+#unfix 123
+
+#velocity all zero linear
+
+#min_style quickmin
+#minimize 0.0 ${forcecon} ${opt_step} ${opt_step}
+#velocity all zero linear
+########################################### the end of test
+print "doing equilibrium"
+doing equilibrium
+reset_timestep 0
+velocity all create 300.0 ${seed} mom yes rot yes dist gaussian
+velocity all create 300.0 91002 mom yes rot yes dist gaussian
+velocity all scale 300.0
+fix 123 ${material_2} spring/self 10.0
+fix 123 Cancer_Cell spring/self 10.0
+fix_modify 123 energy yes
+###shake bond
+fix 4 all shake 0.0001 20 0 b 94 95
+       0 = # of size 2 clusters
+    2300 = # of size 3 clusters
+       0 = # of size 4 clusters
+       0 = # of frozen angles
+  find clusters CPU = 0.002 seconds
+fix 1 all nvt temp 300 300 ${Tdamp}
+fix 1 all nvt temp 300 300 1000
+thermo_style custom step temp etotal c_m1m2E v_m1m2E
+thermo 100
+run		${Eq_step}
+run		30000
+Hybrid pair style last /omp style lj/gromacs/coul/gromacs
+Last active /omp style is improper_style harmonic/omp
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Per MPI rank memory allocation (min/avg/max) = 44.98 | 44.98 | 44.98 Mbytes
+Step Temp TotEng c_m1m2E v_m1m2E 
+       0    380.67816   -21047.281   -126.02925   -126.02925 
+     100    148.98638   -21385.672   -121.47141   -121.47141 
+     200    163.47284    -20826.26   -121.93873   -121.93873 
+     300     178.5984   -20168.135   -121.29692   -121.29692 
+     400    193.19331   -19433.461   -120.39497   -120.39497 
+     500    213.50424    -18640.25   -117.17324   -117.17324 
+     600    225.57905   -17814.049   -120.08993   -120.08993 
+     700    246.06989   -16971.306   -116.58757   -116.58757 
+     800    261.19963   -16136.249   -116.35994   -116.35994 
+     900    274.15634   -15343.568   -114.80217   -114.80217 
+    1000    289.47571    -14629.81   -111.51776   -111.51776 
+    1100    302.80932   -14051.834    -118.8676    -118.8676 
+    1200    308.18959   -13683.916   -116.41243   -116.41243 
+    1300     310.2441   -13591.147   -112.40729   -112.40729 
+    1400    299.85747   -13782.061   -104.02422   -104.02422 
+    1500    294.56076   -14005.178   -110.29112   -110.29112 
+    1600    296.16276   -14073.251   -110.26914   -110.26914 
+    1700    297.93301   -13938.074   -111.58625   -111.58625 
+    1800     303.5873   -13730.277   -109.49111   -109.49111 
+    1900    305.37504   -13625.658   -111.54389   -111.54389 
+    2000    297.87039   -13723.052   -110.32405   -110.32405 
+    2100    297.82723    -13887.04   -115.81509   -115.81509 
+    2200     294.1831   -14000.757   -121.38571   -121.38571 
+    2300    295.29126   -13990.948   -118.80459   -118.80459 
+    2400    292.80302   -13847.106   -116.59906   -116.59906 
+    2500    304.08156   -13656.314   -109.18773   -109.18773 
+    2600    303.53004   -13603.276   -114.13963   -114.13963 
+    2700    302.92262   -13727.368   -118.49142   -118.49142 
+    2800    294.21656   -13909.843   -117.33839   -117.33839 
+    2900    298.12058   -14009.848   -119.24132   -119.24132 
+    3000    288.76572   -13999.439   -121.75894   -121.75894 
+    3100    300.71714   -13841.482    -118.9383    -118.9383 
+    3200    305.00358   -13704.513   -114.15625   -114.15625 
+    3300    304.87809    -13693.02    -110.5293    -110.5293 
+    3400    301.90631   -13785.426   -115.94174   -115.94174 
+    3500    298.27706   -13906.462   -116.31721   -116.31721 
+    3600    297.89814   -13932.512   -114.17981   -114.17981 
+    3700     296.0314   -13890.815   -112.45504   -112.45504 
+    3800    302.65843   -13799.308   -116.53893   -116.53893 
+    3900    302.09795   -13789.436   -112.59122   -112.59122 
+    4000    299.20203   -13857.568   -113.47621   -113.47621 
+    4100    297.81329   -13940.272   -118.54702   -118.54702 
+    4200    294.92653   -13948.975    -118.6257    -118.6257 
+    4300    301.92482   -13843.184   -114.73837   -114.73837 
+    4400    304.61122   -13722.009   -115.41357   -115.41357 
+    4500    301.68147   -13703.936   -107.80467   -107.80467 
+    4600    306.14311   -13794.423   -113.19705   -113.19705 
+    4700    293.27587   -13959.204    -115.6685    -115.6685 
+    4800    297.82192   -14015.471   -113.80772   -113.80772 
+    4900    297.31385   -13941.938   -117.32025   -117.32025 
+    5000    299.39304   -13801.094   -113.47817   -113.47817 
+    5100    299.76922   -13696.748   -116.35282   -116.35282 
+    5200    302.16756   -13682.194   -117.14382   -117.14382 
+    5300    305.04656   -13800.367   -118.65229   -118.65229 
+    5400     298.3815   -13960.492   -117.87235   -117.87235 
+    5500    293.14375   -14018.812   -110.51255   -110.51255 
+    5600     293.3587   -13915.798   -117.32393   -117.32393 
+    5700    306.59722   -13739.578   -119.55135   -119.55135 
+    5800    301.50235   -13690.151   -119.11684   -119.11684 
+    5900    298.07023   -13747.647   -122.03527   -122.03527 
+    6000    293.65709   -13827.273   -115.24813   -115.24813 
+    6100    297.38862   -13865.832   -123.73642   -123.73642 
+    6200    299.26305   -13856.566   -117.47134   -117.47134 
+    6300    302.28357   -13837.902    -116.7464    -116.7464 
+    6400    300.22159   -13822.516   -120.95793   -120.95793 
+    6500    305.41951   -13799.229   -116.64373   -116.64373 
+    6600    297.41544   -13821.974   -122.98986   -122.98986 
+    6700    303.00851   -13819.853   -119.23356   -119.23356 
+    6800    300.30012   -13813.164   -121.58836   -121.58836 
+    6900    295.24619   -13787.079   -119.28194   -119.28194 
+    7000    296.65807   -13791.666   -114.76226   -114.76226 
+    7100    297.05481   -13818.752   -123.79091   -123.79091 
+    7200    301.87284   -13830.886   -113.51161   -113.51161 
+    7300    300.29128   -13810.214   -120.81231   -120.81231 
+    7400    300.14361   -13798.388   -118.83816   -118.83816 
+    7500    301.94865   -13827.639   -122.97756   -122.97756 
+    7600    296.57199    -13888.76   -122.09308   -122.09308 
+    7700    296.25024   -13922.026   -118.48032   -118.48032 
+    7800     300.2031   -13888.807   -118.60096   -118.60096 
+    7900    304.75727   -13852.922   -123.48516   -123.48516 
+    8000     300.1467   -13864.103   -121.81161   -121.81161 
+    8100    299.98541   -13880.991   -120.22075   -120.22075 
+    8200    302.60359   -13848.685   -121.64395   -121.64395 
+    8300    299.99824   -13809.927   -116.50554   -116.50554 
+    8400    299.79412   -13797.911   -124.89506   -124.89506 
+    8500     297.2015    -13822.67   -120.50928   -120.50928 
+    8600     298.7427   -13833.745   -115.38331   -115.38331 
+    8700    304.05425    -13797.04   -117.80071   -117.80071 
+    8800    301.51198   -13767.085    -125.5187    -125.5187 
+    8900    303.18303   -13777.723   -117.89603   -117.89603 
+    9000    300.87887   -13825.229   -120.22302   -120.22302 
+    9100    293.36809   -13914.702     -123.533     -123.533 
+    9200    299.04834   -13921.657   -125.38231   -125.38231 
+    9300    302.21201   -13856.467   -125.81613   -125.81613 
+    9400    300.15145   -13798.955   -126.11217   -126.11217 
+    9500    303.54447   -13754.612   -121.46012   -121.46012 
+    9600    299.30954    -13772.35   -120.74498   -120.74498 
+    9700    297.97413   -13810.347   -122.78257   -122.78257 
+    9800    298.61062   -13819.819   -123.41554   -123.41554 
+    9900    303.09635   -13841.493   -122.66156   -122.66156 
+   10000    299.99958   -13860.458   -122.94314   -122.94314 
+   10100     299.3436   -13832.237    -120.3475    -120.3475 
+   10200    303.70427   -13777.107   -120.43672   -120.43672 
+   10300    300.94954   -13770.745   -118.25187   -118.25187 
+   10400    297.82008   -13815.668   -122.30379   -122.30379 
+   10500    298.29372   -13865.033   -119.51467   -119.51467 
+   10600    296.36113    -13832.47   -123.95857   -123.95857 
+   10700    305.32926   -13718.655   -120.95097   -120.95097 
+   10800    302.76042   -13765.972   -122.21818   -122.21818 
+   10900    297.86045   -13860.952   -126.42774   -126.42774 
+   11000    301.19913   -13872.731   -126.72541   -126.72541 
+   11100    299.19384   -13843.448   -121.35054   -121.35054 
+   11200    296.75543   -13828.088   -122.81381   -122.81381 
+   11300    302.84849    -13803.23    -122.6841    -122.6841 
+   11400    303.26751   -13810.862   -121.00355   -121.00355 
+   11500    297.79759   -13889.184   -119.86346   -119.86346 
+   11600    295.92417    -13923.68   -126.28946   -126.28946 
+   11700    304.13487   -13841.117   -121.74647   -121.74647 
+   11800    303.76543   -13742.314    -118.7421    -118.7421 
+   11900    300.36285   -13755.884   -124.19293   -124.19293 
+   12000     300.9272   -13817.367   -120.58826   -120.58826 
+   12100    298.35845   -13995.371    -118.8521    -118.8521 
+   12200    294.18586   -13967.414   -121.68293   -121.68293 
+   12300    297.09577   -13858.901   -121.73311   -121.73311 
+   12400    299.05303    -13786.44   -124.89602   -124.89602 
+   12500    303.30792   -13803.095   -121.25224   -121.25224 
+   12600    294.92041   -13862.835   -117.18572   -117.18572 
+   12700    297.41399   -13902.999    -125.9799    -125.9799 
+   12800    297.84239   -13856.965   -120.11351   -120.11351 
+   12900    299.49589    -13749.43   -116.78536   -116.78536 
+   13000     303.6602   -13735.822   -116.04654   -116.04654 
+   13100    302.23164   -13843.579   -119.51147   -119.51147 
+   13200    295.92115   -13875.403   -121.37044   -121.37044 
+   13300    299.85884   -13841.682   -116.16092   -116.16092 
+   13400     298.9327   -13842.411    -120.6443    -120.6443 
+   13500    302.74343   -13868.998   -119.65946   -119.65946 
+   13600    297.64677   -13931.937   -121.96027   -121.96027 
+   13700    300.31738   -13980.939    -118.2881    -118.2881 
+   13800    299.36758   -13874.256   -124.68182   -124.68182 
+   13900    299.93054   -13789.799   -119.65109   -119.65109 
+   14000    300.79452   -13788.791   -119.80603   -119.80603 
+   14100    300.71078   -13787.955   -121.41728   -121.41728 
+   14200    302.41638    -13777.55   -120.54851   -120.54851 
+   14300    294.86263   -13806.186   -114.70255   -114.70255 
+   14400    298.40964   -13853.871    -116.4094    -116.4094 
+   14500    297.53097   -13905.393   -123.51655   -123.51655 
+   14600    297.67297   -13898.015   -119.45165   -119.45165 
+   14700    301.03379   -13839.233   -123.16264   -123.16264 
+   14800     301.9152   -13765.804   -121.34185   -121.34185 
+   14900    298.33206   -13788.839   -120.94069   -120.94069 
+   15000    295.35866   -13907.586   -121.42701   -121.42701 
+   15100     295.9262   -13946.166   -119.30066   -119.30066 
+   15200    303.35528   -13896.554   -120.13628   -120.13628 
+   15300    294.04898   -13897.876   -121.73102   -121.73102 
+   15400    300.69425   -13868.133   -121.90648   -121.90648 
+   15500    296.29096    -13862.43   -123.81643   -123.81643 
+   15600     299.9593   -13854.116   -119.41323   -119.41323 
+   15700    300.95067   -13842.788   -117.99833   -117.99833 
+   15800    297.63331    -13831.85   -120.34383   -120.34383 
+   15900    299.17348   -13811.138   -117.15727   -117.15727 
+   16000    299.48293   -13777.599    -118.1992    -118.1992 
+   16100    301.76126   -13818.431   -116.88455   -116.88455 
+   16200    298.75427    -13940.17   -112.87253   -112.87253 
+   16300     296.0184   -13953.814   -117.78863   -117.78863 
+   16400    295.69086   -13910.186   -116.59355   -116.59355 
+   16500    301.28374   -13781.681   -118.33233   -118.33233 
+   16600     300.3208   -13735.805   -121.47825   -121.47825 
+   16700    302.77168   -13749.246   -120.43141   -120.43141 
+   16800    302.12065   -13785.394   -123.30204   -123.30204 
+   16900    299.83614   -13822.529    -117.1867    -117.1867 
+   17000    300.23956   -13840.465   -123.41018   -123.41018 
+   17100     296.7127   -13821.035   -129.11423   -129.11423 
+   17200    299.52738   -13742.126   -123.09964   -123.09964 
+   17300    302.46314   -13696.663   -119.60153   -119.60153 
+   17400    301.69042   -13826.853   -118.62799   -118.62799 
+   17500    295.98886   -13911.591   -119.17806   -119.17806 
+   17600    298.72989   -13868.044   -119.71118   -119.71118 
+   17700    302.10401   -13762.749   -118.02257   -118.02257 
+   17800    301.09877   -13753.906   -119.87238   -119.87238 
+   17900    297.29437   -13825.876   -120.31512   -120.31512 
+   18000    301.72797   -13870.735   -114.31351   -114.31351 
+   18100    300.89946   -13873.068   -123.22595   -123.22595 
+   18200    302.38276   -13828.117   -121.10818   -121.10818 
+   18300    304.19581   -13758.489   -120.91099   -120.91099 
+   18400    300.81552   -13747.717   -118.77311   -118.77311 
+   18500    296.37702   -13900.974   -119.79788   -119.79788 
+   18600     297.9353   -13961.334   -128.60383   -128.60383 
+   18700     300.2687   -13917.451   -119.31417   -119.31417 
+   18800    301.15383   -13820.078   -121.14234   -121.14234 
+   18900    300.40834   -13821.051   -119.90039   -119.90039 
+   19000     299.3603   -13864.662   -124.72725   -124.72725 
+   19100    294.35821   -14025.252    -124.0899    -124.0899 
+   19200    294.68483   -14041.226   -123.26536   -123.26536 
+   19300    293.73639   -13938.383   -123.10982   -123.10982 
+   19400    299.01016   -13840.846   -126.45801   -126.45801 
+   19500    301.66147   -13805.061   -119.72731   -119.72731 
+   19600    302.91365   -13839.975   -121.10777   -121.10777 
+   19700    295.08158   -13937.594   -125.64796   -125.64796 
+   19800    295.54061   -13981.353   -120.90339   -120.90339 
+   19900    299.73048   -13840.859   -123.59308   -123.59308 
+   20000    297.94135   -13750.759   -119.19735   -119.19735 
+   20100    301.44486   -13688.229    -122.0137    -122.0137 
+   20200     300.6379   -13713.699    -116.6065    -116.6065 
+   20300    298.11359   -13843.034      -123.97      -123.97 
+   20400    299.59814   -13892.582   -120.61536   -120.61536 
+   20500    301.33013   -13857.192   -125.09812   -125.09812 
+   20600    300.65773   -13816.749   -122.34624   -122.34624 
+   20700    298.43096   -13753.902   -123.23442   -123.23442 
+   20800    304.06683   -13598.583   -117.69366   -117.69366 
+   20900    305.32076   -13597.214   -125.24682   -125.24682 
+   21000    304.54416   -13698.221   -121.92416   -121.92416 
+   21100    300.19186    -13781.08   -117.91351   -117.91351 
+   21200    295.45004   -13853.625   -122.03144   -122.03144 
+   21300    296.51639   -13915.052   -117.52191   -117.52191 
+   21400    297.98271   -13885.718   -124.66603   -124.66603 
+   21500    302.39252   -13750.637   -121.22726   -121.22726 
+   21600    300.10349   -13735.369   -118.14179   -118.14179 
+   21700    299.96228   -13764.267   -120.29099   -120.29099 
+   21800    297.89095   -13785.979   -119.71639   -119.71639 
+   21900    302.26038   -13801.015   -117.10255   -117.10255 
+   22000     303.0208   -13808.581   -122.64836   -122.64836 
+   22100    302.03206   -13817.467   -119.46357   -119.46357 
+   22200     301.9722   -13824.254   -123.30878   -123.30878 
+   22300    301.14255   -13827.075   -119.19035   -119.19035 
+   22400     298.9713    -13849.34   -124.43877   -124.43877 
+   22500    294.25176     -13966.7   -121.96638   -121.96638 
+   22600    296.69305   -13973.837   -117.86472   -117.86472 
+   22700    299.11011   -13848.358   -118.18967   -118.18967 
+   22800    301.84526   -13806.319   -121.95272   -121.95272 
+   22900    298.58102   -13842.757   -120.24798   -120.24798 
+   23000    297.70969   -13896.388   -123.38033   -123.38033 
+   23100    302.62092   -13909.056   -122.46312   -122.46312 
+   23200    294.40866   -13975.241   -126.13574   -126.13574 
+   23300    296.05293   -13972.016   -127.18236   -127.18236 
+   23400    300.21429   -13855.406   -124.53284   -124.53284 
+   23500    302.17791   -13809.004   -125.27282   -125.27282 
+   23600    301.94037   -13793.005   -121.71899   -121.71899 
+   23700    305.21827   -13703.062   -120.32377   -120.32377 
+   23800    302.21861   -13626.694   -118.93824   -118.93824 
+   23900    301.25653   -13696.972   -124.85252   -124.85252 
+   24000    301.73162   -13814.242   -119.66913   -119.66913 
+   24100    298.14871   -13841.607   -122.43568   -122.43568 
+   24200    299.36009   -13887.737   -124.15828   -124.15828 
+   24300    298.52541   -13928.275   -119.91289   -119.91289 
+   24400    297.31225   -13941.214   -121.82214   -121.82214 
+   24500    297.92992   -13877.913   -128.46757   -128.46757 
+   24600    298.70646   -13768.944   -123.85753   -123.85753 
+   24700    301.01974   -13719.921   -124.62821   -124.62821 
+   24800     299.6007   -13776.242   -122.63213   -122.63213 
+   24900    297.21834   -13884.544   -119.69015   -119.69015 
+   25000    301.13523   -13874.534   -120.18424   -120.18424 
+   25100    299.20947   -13842.482    -118.7642    -118.7642 
+   25200    299.17413    -13792.12   -125.13227   -125.13227 
+   25300    303.39844   -13768.312   -120.77375   -120.77375 
+   25400    296.55984   -13855.869   -125.86139   -125.86139 
+   25500    299.87173   -13943.727   -121.56499   -121.56499 
+   25600    296.41873   -13941.288   -122.14989   -122.14989 
+   25700    301.52477   -13825.394   -122.79807   -122.79807 
+   25800    302.45879    -13771.54    -118.7432    -118.7432 
+   25900    299.00069   -13823.401   -118.42182   -118.42182 
+   26000    302.29118   -13844.403   -119.36468   -119.36468 
+   26100    301.78591   -13836.484   -122.11058   -122.11058 
+   26200    299.47954   -13855.809   -119.29136   -119.29136 
+   26300    301.85302   -13883.869   -124.07415   -124.07415 
+   26400    293.91203   -13952.118   -117.84825   -117.84825 
+   26500    296.13391   -13984.211   -121.05944   -121.05944 
+   26600    296.89098   -13901.312    -122.3824    -122.3824 
+   26700    300.06064   -13810.694   -120.66863   -120.66863 
+   26800    297.09723   -13788.752   -121.88148   -121.88148 
+   26900    299.72623   -13800.054   -120.06798   -120.06798 
+   27000      294.708   -13892.893   -122.47044   -122.47044 
+   27100    288.63591   -13969.507   -114.10153   -114.10153 
+   27200    296.14613   -13880.804   -122.80644   -122.80644 
+   27300    298.28087   -13796.266   -119.10318   -119.10318 
+   27400    301.13873   -13779.539   -127.52431   -127.52431 
+   27500    297.59511   -13788.411   -126.85471   -126.85471 
+   27600    296.81314   -13857.579   -118.44709   -118.44709 
+   27700    293.28782   -13966.562   -122.22054   -122.22054 
+   27800    292.75145    -13996.11   -118.63009   -118.63009 
+   27900    300.11446   -13869.968   -118.68076   -118.68076 
+   28000    296.05047   -13773.185    -118.9427    -118.9427 
+   28100    301.34267   -13751.245   -116.32717   -116.32717 
+   28200    300.04171   -13796.769   -116.59186   -116.59186 
+   28300     296.5664   -13895.843   -120.86663   -120.86663 
+   28400    297.49308   -13949.573    -121.9422    -121.9422 
+   28500    297.10496   -13877.714   -126.16425   -126.16425 
+   28600    301.55179   -13740.441   -123.45552   -123.45552 
+   28700    305.07992   -13760.841   -126.19034   -126.19034 
+   28800    298.10431    -13874.08   -126.19129   -126.19129 
+   28900    296.67393   -13908.793   -127.27247   -127.27247 
+   29000    297.25917   -13887.891   -119.18398   -119.18398 
+   29100    304.42735   -13780.554    -124.1672    -124.1672 
+   29200    302.35337   -13679.247   -124.12746   -124.12746 
+   29300    302.61812   -13712.877   -123.99055   -123.99055 
+   29400     305.2782   -13801.531    -119.9324    -119.9324 
+   29500    297.92694   -13869.386   -128.98561   -128.98561 
+   29600    303.16515   -13864.513   -123.78655   -123.78655 
+   29700    301.49408   -13865.152   -126.53106   -126.53106 
+   29800    300.99853   -13813.548   -123.42353   -123.42353 
+   29900    304.90111   -13704.632   -121.15713   -121.15713 
+   30000    301.18435   -13702.229   -123.40114   -123.40114 
+Loop time of 274.111 on 12 procs for 30000 steps with 7236 atoms
+
+Performance: 94.560 ns/day, 0.254 hours/ns, 109.445 timesteps/s
+1197.1% CPU use with 1 MPI tasks x 12 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 50.696     | 50.696     | 50.696     |   0.0 | 18.49
+Bond    | 6.5825     | 6.5825     | 6.5825     |   0.0 |  2.40
+Neigh   | 10.919     | 10.919     | 10.919     |   0.0 |  3.98
+Comm    | 48.166     | 48.166     | 48.166     |   0.0 | 17.57
+Output  | 0.071974   | 0.071974   | 0.071974   |   0.0 |  0.03
+Modify  | 142.98     | 142.98     | 142.98     |   0.0 | 52.16
+Other   |            | 14.7       |            |       |  5.36
+
+Nlocal:        7236.00 ave        7236 max        7236 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:        14006.0 ave       14006 max       14006 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1.03485e+06 ave 1.03485e+06 max 1.03485e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1034848
+Ave neighs/atom = 143.01382
+Ave special neighs/atom = 2.0359315
+Neighbor list builds = 2991
+Dangerous builds = 2974
+unfix 1
+unfix 123
+unfix 4
+
+write_data After_NVT.data nocoeff
+System init for write_data ...
+Hybrid pair style last /omp style lj/gromacs/coul/gromacs
+Last active /omp style is improper_style harmonic/omp
+
+### initial value setting!!!!!
+#************ DMD ********************
+#print "DMD before STUN_BH"
+#    reset_timestep 0
+#    include all_data_mix100.in
+#    include system_opt.in
+#    include DMD.in
+
+#************ MD  *******************
+print "****MD before STUN_BH"
+****MD before STUN_BH
+    reset_timestep 0
+    include all_data_mix.in
+#pair_coeff  	* 	* 	 lj/gromacs 				0.0000 	0.2 	0.001 	0.5
+pair_coeff  	* 	* 	 lj/gromacs/coul/gromacs	0.0000 	0.10
+pair_coeff		1   1    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C1 C1
+pair_coeff		1   2    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C1 C2
+pair_coeff		1   3    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C1 C3
+pair_coeff		1   4    lj/gromacs/coul/gromacs	0.7409  4.7000 	# C1 C5
+pair_coeff		1   5    lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 N0
+pair_coeff		1   6    lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 P1
+pair_coeff		1   7    lj/gromacs/coul/gromacs	0.4780  4.7000 	# C1 P4
+pair_coeff		1   8    lj/gromacs/coul/gromacs	0.4780  4.7000 	# C1 P5
+pair_coeff		1   9    lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 Qa
+pair_coeff		1   10   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 Qd
+pair_coeff		1   11   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C1 SC4
+pair_coeff		1   12   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C1 SC5
+pair_coeff		1   13   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 SNd
+pair_coeff		1   14   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 SP1
+pair_coeff		1   15   lj/gromacs/coul/gromacs	0.4541  4.7000 	# C1 POL
+pair_coeff		1   18   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 Qa
+pair_coeff		1   19   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 Qd
+pair_coeff		1   20   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 Q0
+pair_coeff		1   21   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C1 SC2
+pair_coeff		1   22   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 SN0
+pair_coeff		1   23   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TA2
+pair_coeff		1   24   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TA3
+pair_coeff		1   25   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TG2
+pair_coeff		1   26   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 TG3
+pair_coeff		1   27   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TN0
+pair_coeff		1   28   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TNa
+pair_coeff		1   29   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 TT2
+pair_coeff		1   30   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TT3
+pair_coeff		1   31   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 TY2
+pair_coeff		1   32   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TY3
+pair_coeff		2   2    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C2 C2
+pair_coeff		2   3    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C2 C3
+pair_coeff		2   4    lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 C5
+pair_coeff		2   5    lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 N0
+pair_coeff		2   6    lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 P1
+pair_coeff		2   7    lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 P4
+pair_coeff		2   8    lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 P5
+pair_coeff		2   9    lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 Qa
+pair_coeff		2   10   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 Qd
+pair_coeff		2   11   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 SC4
+pair_coeff		2   12   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 SC5
+pair_coeff		2   13   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C2 SNd
+pair_coeff		2   14   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 SP1
+pair_coeff		2   15   lj/gromacs/coul/gromacs	0.5222  4.7000 	# C2 POL
+pair_coeff		2   18   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 Qa
+pair_coeff		2   19   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 Qd
+pair_coeff		2   20   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 Q0
+pair_coeff		2   21   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C2 SC2
+pair_coeff		2   22   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 SN0
+pair_coeff		2   23   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 TA2
+pair_coeff		2   24   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 TA3
+pair_coeff		2   25   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 TG2
+pair_coeff		2   26   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C2 TG3
+pair_coeff		2   27   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 TN0
+pair_coeff		2   28   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C2 TNa
+pair_coeff		2   29   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C2 TT2
+pair_coeff		2   30   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C2 TT3
+pair_coeff		2   31   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C2 TY2
+pair_coeff		2   32   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 TY3
+pair_coeff		3   3    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 C3
+pair_coeff		3   4    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 C5
+pair_coeff		3   5    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 N0
+pair_coeff		3   6    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 P1
+pair_coeff		3   7    lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 P4
+pair_coeff		3   8    lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 P5
+pair_coeff		3   9    lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 Qa
+pair_coeff		3   10   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 Qd
+pair_coeff		3   11   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 SC4
+pair_coeff		3   12   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 SC5
+pair_coeff		3   13   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 SNd
+pair_coeff		3   14   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 SP1
+pair_coeff		3   15   lj/gromacs/coul/gromacs	0.6130  4.7000 	# C3 POL
+pair_coeff		3   18   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 Qa
+pair_coeff		3   19   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 Qd
+pair_coeff		3   20   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 Q0
+pair_coeff		3   21   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 SC2
+pair_coeff		3   22   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 SN0
+pair_coeff		3   23   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 TA2
+pair_coeff		3   24   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 TA3
+pair_coeff		3   25   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 TG2
+pair_coeff		3   26   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C3 TG3
+pair_coeff		3   27   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 TN0
+pair_coeff		3   28   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 TNa
+pair_coeff		3   29   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C3 TT2
+pair_coeff		3   30   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 TT3
+pair_coeff		3   31   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C3 TY2
+pair_coeff		3   32   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 TY3
+pair_coeff		4   4    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 C5
+pair_coeff		4   5    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 N0
+pair_coeff		4   6    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 P1
+pair_coeff		4   7    lj/gromacs/coul/gromacs	0.7409  4.7000 	# C5 P4
+pair_coeff		4   8    lj/gromacs/coul/gromacs	0.7409  4.7000 	# C5 P5
+pair_coeff		4   9    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 Qa
+pair_coeff		4   10   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 Qd
+pair_coeff		4   11   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 SC4
+pair_coeff		4   12   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 SC5
+pair_coeff		4   13   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 SNd
+pair_coeff		4   14   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 SP1
+pair_coeff		4   15   lj/gromacs/coul/gromacs	0.7039  4.7000 	# C5 POL
+pair_coeff		4   18   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 Qa
+pair_coeff		4   19   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 Qd
+pair_coeff		4   20   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 Q0
+pair_coeff		4   21   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C5 SC2
+pair_coeff		4   22   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 SN0
+pair_coeff		4   23   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TA2
+pair_coeff		4   24   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TA3
+pair_coeff		4   25   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TG2
+pair_coeff		4   26   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TG3
+pair_coeff		4   27   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TN0
+pair_coeff		4   28   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TNa
+pair_coeff		4   29   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TT2
+pair_coeff		4   30   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TT3
+pair_coeff		4   31   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TY2
+pair_coeff		4   32   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TY3
+pair_coeff		5   5    lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 N0
+pair_coeff		5   6    lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 P1
+pair_coeff		5   7    lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 P4
+pair_coeff		5   8    lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 P5
+pair_coeff		5   9    lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 Qa
+pair_coeff		5   10   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 Qd
+pair_coeff		5   11   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 SC4
+pair_coeff		5   12   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 SC5
+pair_coeff		5   13   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 SNd
+pair_coeff		5   14   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 SP1
+pair_coeff		5   15   lj/gromacs/coul/gromacs	0.7947  4.7000 	# N0 POL
+pair_coeff		5   18   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 Qa
+pair_coeff		5   19   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 Qd
+pair_coeff		5   20   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 Q0
+pair_coeff		5   21   lj/gromacs/coul/gromacs	0.7409  4.7000 	# N0 SC2
+pair_coeff		5   22   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 SN0
+pair_coeff		5   23   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 TA2
+pair_coeff		5   24   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 TA3
+pair_coeff		5   25   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 TG2
+pair_coeff		5   26   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 TG3
+pair_coeff		5   27   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 TN0
+pair_coeff		5   28   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 TNa
+pair_coeff		5   29   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 TT2
+pair_coeff		5   30   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 TT3
+pair_coeff		5   31   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 TY2
+pair_coeff		5   32   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 TY3
+pair_coeff		6   6    lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 P1
+pair_coeff		6   7    lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 P4
+pair_coeff		6   8    lj/gromacs/coul/gromacs	1.3384  4.7000 	# P1 P5
+pair_coeff		6   9    lj/gromacs/coul/gromacs	1.3384  4.7000 	# P1 Qa
+pair_coeff		6   10   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P1 Qd
+pair_coeff		6   11   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P1 SC4
+pair_coeff		6   12   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P1 SC5
+pair_coeff		6   13   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 SNd
+pair_coeff		6   14   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 SP1
+pair_coeff		6   15   lj/gromacs/coul/gromacs	1.0217  4.7000 	# P1 POL
+pair_coeff		6   18   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P1 Qa
+pair_coeff		6   19   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P1 Qd
+pair_coeff		6   20   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 Q0
+pair_coeff		6   21   lj/gromacs/coul/gromacs	0.7409  4.7000 	# P1 SC2
+pair_coeff		6   22   lj/gromacs/coul/gromacs	0.9560  4.7000 	# P1 SN0
+pair_coeff		6   23   lj/gromacs/coul/gromacs	0.9560  4.7000 	# P1 TA2
+pair_coeff		6   24   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TA3
+pair_coeff		6   25   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TG2
+pair_coeff		6   26   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TG3
+pair_coeff		6   27   lj/gromacs/coul/gromacs	0.9560  4.7000 	# P1 TN0
+pair_coeff		6   28   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TNa
+pair_coeff		6   29   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TT2
+pair_coeff		6   30   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TT3
+pair_coeff		6   31   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TY2
+pair_coeff		6   32   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TY3
+pair_coeff		7   7    lj/gromacs/coul/gromacs	1.1950  4.7000 	# P4 P4
+pair_coeff		7   8    lj/gromacs/coul/gromacs	1.3384  4.7000 	# P4 P5
+pair_coeff		7   9    lj/gromacs/coul/gromacs	1.3384  4.7000 	# P4 Qa
+pair_coeff		7   10   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P4 Qd
+pair_coeff		7   11   lj/gromacs/coul/gromacs	0.6453  4.7000 	# P4 SC4
+pair_coeff		7   12   lj/gromacs/coul/gromacs	0.7409  4.7000 	# P4 SC5
+pair_coeff		7   13   lj/gromacs/coul/gromacs	0.9560  4.7000 	# P4 SNd
+pair_coeff		7   14   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 SP1
+pair_coeff		7   15   lj/gromacs/coul/gromacs	1.1353  4.7000 	# P4 POL
+pair_coeff		7   18   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P4 Qa
+pair_coeff		7   19   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P4 Qd
+pair_coeff		7   20   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P4 Q0
+pair_coeff		7   21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# P4 SC2
+pair_coeff		7   22   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P4 SN0
+pair_coeff		7   23   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P4 TA2
+pair_coeff		7   24   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 TA3
+pair_coeff		7   25   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 TG2
+pair_coeff		7   26   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 TG3
+pair_coeff		7   27   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P4 TN0
+pair_coeff		7   28   lj/gromacs/coul/gromacs	0.9560  4.7000 	# P4 TNa
+pair_coeff		7   29   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 TT2
+pair_coeff		7   30   lj/gromacs/coul/gromacs	0.9560  4.7000 	# P4 TT3
+pair_coeff		7   31   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 TY2
+pair_coeff		7   32   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 TY3
+pair_coeff		8   8    lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 P5
+pair_coeff		8   9    lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 Qa
+pair_coeff		8   10   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 Qd
+pair_coeff		8   11   lj/gromacs/coul/gromacs	0.6453  4.7000 	# P5 SC4
+pair_coeff		8   12   lj/gromacs/coul/gromacs	0.7409  4.7000 	# P5 SC5
+pair_coeff		8   13   lj/gromacs/coul/gromacs	1.1950  4.7000 	# P5 SNd
+pair_coeff		8   14   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 SP1
+pair_coeff		8   15   lj/gromacs/coul/gromacs	1.2715  4.7000 	# P5 POL
+pair_coeff		8   18   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 Qa
+pair_coeff		8   19   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 Qd
+pair_coeff		8   20   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 Q0
+pair_coeff		8   21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# P5 SC2
+pair_coeff		8   22   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P5 SN0
+pair_coeff		8   23   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P5 TA2
+pair_coeff		8   24   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 TA3
+pair_coeff		8   25   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 TG2
+pair_coeff		8   26   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 TG3
+pair_coeff		8   27   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P5 TN0
+pair_coeff		8   28   lj/gromacs/coul/gromacs	1.1950  4.7000 	# P5 TNa
+pair_coeff		8   29   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 TT2
+pair_coeff		8   30   lj/gromacs/coul/gromacs	1.1950  4.7000 	# P5 TT3
+pair_coeff		8   31   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 TY2
+pair_coeff		8   32   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 TY3
+pair_coeff		9   9    lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qa Qa
+pair_coeff		9   10   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa Qd
+pair_coeff		9   11   lj/gromacs/coul/gromacs	0.7409  4.7000 	# Qa SC4
+pair_coeff		9   12   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qa SC5
+pair_coeff		9   13   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa SNd
+pair_coeff		9   14   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa SP1
+pair_coeff		9   15   lj/gromacs/coul/gromacs	1.1950  4.7000 	# Qa POL
+pair_coeff		9   18   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qa Qa
+pair_coeff		9   19   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa Qd
+pair_coeff		9   20   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qa Q0
+pair_coeff		9   21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qa SC2
+pair_coeff		9   22   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa SN0
+pair_coeff		9   23   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa TA2
+pair_coeff		9   24   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TA3
+pair_coeff		9   25   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TG2
+pair_coeff		9   26   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TG3
+pair_coeff		9   27   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa TN0
+pair_coeff		9   28   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Qa TNa
+pair_coeff		9   29   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TT2
+pair_coeff		9   30   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Qa TT3
+pair_coeff		9   31   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TY2
+pair_coeff		9   32   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TY3
+pair_coeff		10  10   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qd Qd
+pair_coeff		10  11   lj/gromacs/coul/gromacs	0.7409  4.7000 	# Qd SC4
+pair_coeff		10  12   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qd SC5
+pair_coeff		10  13   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Qd SNd
+pair_coeff		10  14   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd SP1
+pair_coeff		10  15   lj/gromacs/coul/gromacs	1.1950  4.7000 	# Qd POL
+pair_coeff		10  18   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd Qa
+pair_coeff		10  19   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qd Qd
+pair_coeff		10  20   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qd Q0
+pair_coeff		10  21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qd SC2
+pair_coeff		10  22   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd SN0
+pair_coeff		10  23   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd TA2
+pair_coeff		10  24   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TA3
+pair_coeff		10  25   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TG2
+pair_coeff		10  26   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TG3
+pair_coeff		10  27   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd TN0
+pair_coeff		10  28   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TNa
+pair_coeff		10  29   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TT2
+pair_coeff		10  30   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TT3
+pair_coeff		10  31   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TY2
+pair_coeff		10  32   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TY3
+pair_coeff		11  11   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 SC4
+pair_coeff		11  12   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 SC5
+pair_coeff		11  13   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC4 SNd
+pair_coeff		11  14   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 SP1
+pair_coeff		11  15   lj/gromacs/coul/gromacs	0.6130  4.7000 	# SC4 POL
+pair_coeff		11  18   lj/gromacs/coul/gromacs	0.7409  4.7000 	# SC4 Qa
+pair_coeff		11  19   lj/gromacs/coul/gromacs	0.7409  4.7000 	# SC4 Qd
+pair_coeff		11  20   lj/gromacs/coul/gromacs	0.7409  4.7000 	# SC4 Q0
+pair_coeff		11  21   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC4 SC2
+pair_coeff		11  22   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 SN0
+pair_coeff		11  23   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TA2
+pair_coeff		11  24   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TA3
+pair_coeff		11  25   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TG2
+pair_coeff		11  26   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TG3
+pair_coeff		11  27   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TN0
+pair_coeff		11  28   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC4 TNa
+pair_coeff		11  29   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TT2
+pair_coeff		11  30   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC4 TT3
+pair_coeff		11  31   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TY2
+pair_coeff		11  32   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TY3
+pair_coeff		12  12   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 SC5
+pair_coeff		12  13   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 SNd
+pair_coeff		12  14   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 SP1
+pair_coeff		12  15   lj/gromacs/coul/gromacs	0.7039  4.7000 	# SC5 POL
+pair_coeff		12  18   lj/gromacs/coul/gromacs	0.8365  4.7000 	# SC5 Qa
+pair_coeff		12  19   lj/gromacs/coul/gromacs	0.8365  4.7000 	# SC5 Qd
+pair_coeff		12  20   lj/gromacs/coul/gromacs	0.8365  4.7000 	# SC5 Q0
+pair_coeff		12  21   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC5 SC2
+pair_coeff		12  22   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 SN0
+pair_coeff		12  23   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TA2
+pair_coeff		12  24   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TA3
+pair_coeff		12  25   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TG2
+pair_coeff		12  26   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TG3
+pair_coeff		12  27   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TN0
+pair_coeff		12  28   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TNa
+pair_coeff		12  29   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TT2
+pair_coeff		12  30   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TT3
+pair_coeff		12  31   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TY2
+pair_coeff		12  32   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TY3
+pair_coeff		13  13   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SNd SNd
+pair_coeff		13  14   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd SP1
+pair_coeff		13  15   lj/gromacs/coul/gromacs	0.9082  4.7000 	# SNd POL
+pair_coeff		13  18   lj/gromacs/coul/gromacs	1.3384  4.7000 	# SNd Qa
+pair_coeff		13  19   lj/gromacs/coul/gromacs	1.0755  4.7000 	# SNd Qd
+pair_coeff		13  20   lj/gromacs/coul/gromacs	1.0755  4.7000 	# SNd Q0
+pair_coeff		13  21   lj/gromacs/coul/gromacs	0.4840  4.3000 	# SNd SC2
+pair_coeff		13  22   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SNd SN0
+pair_coeff		13  23   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SNd TA2
+pair_coeff		13  24   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TA3
+pair_coeff		13  25   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TG2
+pair_coeff		13  26   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TG3
+pair_coeff		13  27   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SNd TN0
+pair_coeff		13  28   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TNa
+pair_coeff		13  29   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TT2
+pair_coeff		13  30   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TT3
+pair_coeff		13  31   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TY2
+pair_coeff		13  32   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TY3
+pair_coeff		14  14   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 SP1
+pair_coeff		14  15   lj/gromacs/coul/gromacs	1.0217  4.7000 	# SP1 POL
+pair_coeff		14  18   lj/gromacs/coul/gromacs	1.3384  4.7000 	# SP1 Qa
+pair_coeff		14  19   lj/gromacs/coul/gromacs	1.3384  4.7000 	# SP1 Qd
+pair_coeff		14  20   lj/gromacs/coul/gromacs	1.0755  4.7000 	# SP1 Q0
+pair_coeff		14  21   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SP1 SC2
+pair_coeff		14  22   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SP1 SN0
+pair_coeff		14  23   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SP1 TA2
+pair_coeff		14  24   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TA3
+pair_coeff		14  25   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TG2
+pair_coeff		14  26   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TG3
+pair_coeff		14  27   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SP1 TN0
+pair_coeff		14  28   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TNa
+pair_coeff		14  29   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TT2
+pair_coeff		14  30   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TT3
+pair_coeff		14  31   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TY2
+pair_coeff		14  32   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TY3
+pair_coeff		15  15   lj/gromacs/coul/gromacs	0.9560  4.7000 	# POL POL
+pair_coeff		15  18   lj/gromacs/coul/gromacs	1.1950  4.7000 	# POL Qa
+pair_coeff		15  19   lj/gromacs/coul/gromacs	1.1950  4.7000 	# POL Qd
+pair_coeff		15  20   lj/gromacs/coul/gromacs	1.0755  4.7000 	# POL Q0
+pair_coeff		15  21   lj/gromacs/coul/gromacs	0.5222  4.7000 	# POL SC2
+pair_coeff		15  22   lj/gromacs/coul/gromacs	0.7947  4.7000 	# POL SN0
+pair_coeff		15  23   lj/gromacs/coul/gromacs	0.7947  4.7000 	# POL TA2
+pair_coeff		15  24   lj/gromacs/coul/gromacs	1.0217  4.7000 	# POL TA3
+pair_coeff		15  25   lj/gromacs/coul/gromacs	1.0217  4.7000 	# POL TG2
+pair_coeff		15  26   lj/gromacs/coul/gromacs	1.0217  4.7000 	# POL TG3
+pair_coeff		15  27   lj/gromacs/coul/gromacs	0.7947  4.7000 	# POL TN0
+pair_coeff		15  28   lj/gromacs/coul/gromacs	0.9082  4.7000 	# POL TNa
+pair_coeff		15  29   lj/gromacs/coul/gromacs	1.0217  4.7000 	# POL TT2
+pair_coeff		15  30   lj/gromacs/coul/gromacs	0.9082  4.7000 	# POL TT3
+pair_coeff		15  31   lj/gromacs/coul/gromacs	1.0217  4.7000 	# POL TY2
+pair_coeff		15  32   lj/gromacs/coul/gromacs	1.0217  4.7000 	# POL TY3
+pair_coeff		18  18   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qa Qa
+pair_coeff		18  19   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa Qd
+pair_coeff		18  20   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qa Q0
+pair_coeff		18  21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qa SC2
+pair_coeff		18  22   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa SN0
+pair_coeff		18  23   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa TA2
+pair_coeff		18  24   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TA3
+pair_coeff		18  25   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TG2
+pair_coeff		18  26   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TG3
+pair_coeff		18  27   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa TN0
+pair_coeff		18  28   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Qa TNa
+pair_coeff		18  29   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TT2
+pair_coeff		18  30   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Qa TT3
+pair_coeff		18  31   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TY2
+pair_coeff		18  32   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TY3
+pair_coeff		19  19   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qd Qd
+pair_coeff		19  20   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qd Q0
+pair_coeff		19  21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qd SC2
+pair_coeff		19  22   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd SN0
+pair_coeff		19  23   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd TA2
+pair_coeff		19  24   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TA3
+pair_coeff		19  25   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TG2
+pair_coeff		19  26   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TG3
+pair_coeff		19  27   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd TN0
+pair_coeff		19  28   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TNa
+pair_coeff		19  29   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TT2
+pair_coeff		19  30   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TT3
+pair_coeff		19  31   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TY2
+pair_coeff		19  32   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TY3
+pair_coeff		20  20   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Q0 Q0
+pair_coeff		20  21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Q0 SC2
+pair_coeff		20  22   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Q0 SN0
+pair_coeff		20  23   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Q0 TA2
+pair_coeff		20  24   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Q0 TA3
+pair_coeff		20  25   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Q0 TG2
+pair_coeff		20  26   lj/gromacs/coul/gromacs	1.1950  4.7000 	# Q0 TG3
+pair_coeff		20  27   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Q0 TN0
+pair_coeff		20  28   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Q0 TNa
+pair_coeff		20  29   lj/gromacs/coul/gromacs	1.1950  4.7000 	# Q0 TT2
+pair_coeff		20  30   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Q0 TT3
+pair_coeff		20  31   lj/gromacs/coul/gromacs	1.1950  4.7000 	# Q0 TY2
+pair_coeff		20  32   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Q0 TY3
+pair_coeff		21  21   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC2 SC2
+pair_coeff		21  22   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC2 SN0
+pair_coeff		21  23   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC2 TA2
+pair_coeff		21  24   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC2 TA3
+pair_coeff		21  25   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC2 TG2
+pair_coeff		21  26   lj/gromacs/coul/gromacs	0.4840  4.3000 	# SC2 TG3
+pair_coeff		21  27   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC2 TN0
+pair_coeff		21  28   lj/gromacs/coul/gromacs	0.4840  4.3000 	# SC2 TNa
+pair_coeff		21  29   lj/gromacs/coul/gromacs	0.4840  4.3000 	# SC2 TT2
+pair_coeff		21  30   lj/gromacs/coul/gromacs	0.4840  4.3000 	# SC2 TT3
+pair_coeff		21  31   lj/gromacs/coul/gromacs	0.4840  4.3000 	# SC2 TY2
+pair_coeff		21  32   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC2 TY3
+pair_coeff		22  22   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SN0 SN0
+pair_coeff		22  23   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SN0 TA2
+pair_coeff		22  24   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SN0 TA3
+pair_coeff		22  25   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SN0 TG2
+pair_coeff		22  26   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SN0 TG3
+pair_coeff		22  27   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SN0 TN0
+pair_coeff		22  28   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SN0 TNa
+pair_coeff		22  29   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SN0 TT2
+pair_coeff		22  30   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SN0 TT3
+pair_coeff		22  31   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SN0 TY2
+pair_coeff		22  32   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SN0 TY3
+pair_coeff		23  23   lj/gromacs/coul/gromacs	0.5497  3.2000 	# TA2 TA2
+pair_coeff		23  24   lj/gromacs/coul/gromacs	0.6453  3.2000 	# TA2 TA3
+pair_coeff		23  25   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TA2 TG2
+pair_coeff		23  26   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TA2 TG3
+pair_coeff		23  27   lj/gromacs/coul/gromacs	0.6274  3.2000 	# TA2 TN0
+pair_coeff		23  28   lj/gromacs/coul/gromacs	0.6274  3.2000 	# TA2 TNa
+pair_coeff		23  29   lj/gromacs/coul/gromacs	1.1950  3.2000 	# TA2 TT2
+pair_coeff		23  30   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TA2 TT3
+pair_coeff		23  31   lj/gromacs/coul/gromacs	0.6453  3.2000 	# TA2 TY2
+pair_coeff		23  32   lj/gromacs/coul/gromacs	0.8365  3.2000 	# TA2 TY3
+pair_coeff		24  24   lj/gromacs/coul/gromacs	0.6453  3.2000 	# TA3 TA3
+pair_coeff		24  25   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TA3 TG2
+pair_coeff		24  26   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TA3 TG3
+pair_coeff		24  27   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TA3 TN0
+pair_coeff		24  28   lj/gromacs/coul/gromacs	0.8066  3.2000 	# TA3 TNa
+pair_coeff		24  29   lj/gromacs/coul/gromacs	1.0755  3.2000 	# TA3 TT2
+pair_coeff		24  30   lj/gromacs/coul/gromacs	1.1950  3.2000 	# TA3 TT3
+pair_coeff		24  31   lj/gromacs/coul/gromacs	0.8365  3.2000 	# TA3 TY2
+pair_coeff		24  32   lj/gromacs/coul/gromacs	0.6453  3.2000 	# TA3 TY3
+pair_coeff		25  25   lj/gromacs/coul/gromacs	0.4780  3.2000 	# TG2 TG2
+pair_coeff		25  26   lj/gromacs/coul/gromacs	0.4780  3.2000 	# TG2 TG3
+pair_coeff		25  27   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TG2 TN0
+pair_coeff		25  28   lj/gromacs/coul/gromacs	0.8066  3.2000 	# TG2 TNa
+pair_coeff		25  29   lj/gromacs/coul/gromacs	0.8365  3.2000 	# TG2 TT2
+pair_coeff		25  30   lj/gromacs/coul/gromacs	0.7409  3.2000 	# TG2 TT3
+pair_coeff		25  31   lj/gromacs/coul/gromacs	1.5535  3.2000 	# TG2 TY2
+pair_coeff		25  32   lj/gromacs/coul/gromacs	1.4818  3.2000 	# TG2 TY3
+pair_coeff		26  26   lj/gromacs/coul/gromacs	0.4780  3.2000 	# TG3 TG3
+pair_coeff		26  27   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TG3 TN0
+pair_coeff		26  28   lj/gromacs/coul/gromacs	0.8066  3.2000 	# TG3 TNa
+pair_coeff		26  29   lj/gromacs/coul/gromacs	0.7409  3.2000 	# TG3 TT2
+pair_coeff		26  30   lj/gromacs/coul/gromacs	0.8365  3.2000 	# TG3 TT3
+pair_coeff		26  31   lj/gromacs/coul/gromacs	1.4818  3.2000 	# TG3 TY2
+pair_coeff		26  32   lj/gromacs/coul/gromacs	1.5535  3.2000 	# TG3 TY3
+pair_coeff		27  27   lj/gromacs/coul/gromacs	0.6274  3.2000 	# TN0 TN0
+pair_coeff		27  28   lj/gromacs/coul/gromacs	0.6274  3.2000 	# TN0 TNa
+pair_coeff		27  29   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TN0 TT2
+pair_coeff		27  30   lj/gromacs/coul/gromacs	0.6274  3.2000 	# TN0 TT3
+pair_coeff		27  31   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TN0 TY2
+pair_coeff		27  32   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TN0 TY3
+pair_coeff		28  28   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TNa TNa
+pair_coeff		28  29   lj/gromacs/coul/gromacs	0.8066  3.2000 	# TNa TT2
+pair_coeff		28  30   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TNa TT3
+pair_coeff		28  31   lj/gromacs/coul/gromacs	0.8066  3.2000 	# TNa TY2
+pair_coeff		28  32   lj/gromacs/coul/gromacs	0.8066  3.2000 	# TNa TY3
+pair_coeff		29  29   lj/gromacs/coul/gromacs	1.0755  3.2000 	# TT2 TT2
+pair_coeff		29  30   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TT2 TT3
+pair_coeff		29  31   lj/gromacs/coul/gromacs	1.1950  3.2000 	# TT2 TY2
+pair_coeff		29  32   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TT2 TY3
+pair_coeff		30  30   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TT3 TT3
+pair_coeff		30  31   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TT3 TY2
+pair_coeff		30  32   lj/gromacs/coul/gromacs	1.1950  3.2000 	# TT3 TY3
+pair_coeff		31  31   lj/gromacs/coul/gromacs	0.8365  3.2000 	# TY2 TY2
+pair_coeff		31  32   lj/gromacs/coul/gromacs	0.6453  3.2000 	# TY2 TY3
+pair_coeff		32  32   lj/gromacs/coul/gromacs	0.8365  3.2000 	# TY3 TY3
+    include system_opt.in
+#!!!!!fix 1 all box/relax iso 0. # if PBC is true, you should use this command.
+
+# The following is only for testing which optimzation method works for your current potential function.
+# You should do the test when you conduct this script first time. Then check the log file to keep the workable methods.
+############################################# Test begions
+
+#fix 123 ${material_2} spring/self 10.0
+#fix_modify 123 energy yes
+reset_timestep 0
+thermo 500
+thermo_style custom step temp etotal v_m1m2E c_m1m2E
+
+#min_style sd
+#minimize 0.0 ${forcecon} ${opt_step} ${opt_step}
+
+#min_style hftn
+#minimize 0.0 ${forcecon} ${opt_step} ${opt_step}
+
+#timestep ${timesize}
+min_style cg
+##minimize 0.0 1e-6 ${opt_step1} ${opt_step2} #1w~10w
+minimize 0.0 0.0 ${opt_step1} ${opt_step2} #1w~10w
+minimize 0.0 0.0 20000 ${opt_step2} 
+minimize 0.0 0.0 20000 20000 
+WARNING: Using 'neigh_modify every 1 delay 0 check yes' setting during minimization (../min.cpp:187)
+Hybrid pair style last /omp style lj/gromacs/coul/gromacs
+Last active /omp style is improper_style harmonic/omp
+Per MPI rank memory allocation (min/avg/max) = 41.74 | 41.74 | 41.74 Mbytes
+Step Temp TotEng v_m1m2E c_m1m2E 
+       0    237.35353   -13816.257   -123.40114   -123.40114 
+     500    237.35353   -21257.527   -128.98719   -128.98719 
+    1000    237.35353   -21576.815   -128.35395   -128.35395 
+    1500    237.35353   -21750.104   -128.78886   -128.78886 
+    2000    237.35353   -21821.293   -129.14795   -129.14795 
+    2500    237.35353   -21881.927   -129.72018   -129.72018 
+    3000    237.35353   -21928.747   -129.16813   -129.16813 
+    3500    237.35353   -21964.907   -129.82683   -129.82683 
+    4000    237.35353   -21995.491   -129.07555   -129.07555 
+    4500    237.35353    -22020.23   -128.44832   -128.44832 
+    5000    237.35353   -22055.337   -129.61718   -129.61718 
+    5500    237.35353   -22072.161   -129.51454   -129.51454 
+    6000    237.35353   -22082.472   -129.63583   -129.63583 
+    6500    237.35353   -22096.953   -130.01297   -130.01297 
+    7000    237.35353    -22114.69   -130.37823   -130.37823 
+    7500    237.35353   -22136.307    -130.4075    -130.4075 
+    8000    237.35353   -22161.297   -131.09715   -131.09715 
+    8500    237.35353   -22170.758   -131.55571   -131.55571 
+    9000    237.35353   -22180.162   -131.40034   -131.40034 
+    9500    237.35353    -22186.06   -130.94983   -130.94983 
+   10000    237.35353   -22196.466   -130.98128   -130.98128 
+   10008    237.35353   -22196.531   -130.98103   -130.98103 
+Loop time of 71.8378 on 12 procs for 10008 steps with 7236 atoms
+
+1197.7% CPU use with 1 MPI tasks x 12 OpenMP threads
+
+Minimization stats:
+  Stopping criterion = max force evaluations
+  Energy initial, next-to-last, final = 
+     -18935.0610062683  -27315.3272454526   -27315.334820881
+  Force two-norm initial, final = 483.23027 2.5652072
+  Force max component initial, final = 32.913119 0.43730918
+  Final line search alpha, max atom move = 0.063733906 0.027871422
+  Iterations, force evaluations = 10008 20000
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 64.095     | 64.095     | 64.095     |   0.0 | 89.22
+Bond    | 1.9864     | 1.9864     | 1.9864     |   0.0 |  2.77
+Neigh   | 1.0283     | 1.0283     | 1.0283     |   0.0 |  1.43
+Comm    | 1.3907     | 1.3907     | 1.3907     |   0.0 |  1.94
+Output  | 0.0047613  | 0.0047613  | 0.0047613  |   0.0 |  0.01
+Modify  | 0.75319    | 0.75319    | 0.75319    |   0.0 |  1.05
+Other   |            | 2.58       |            |       |  3.59
+
+Nlocal:        7236.00 ave        7236 max        7236 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:        13100.0 ave       13100 max       13100 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1.08391e+06 ave 1.08391e+06 max 1.08391e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1083913
+Ave neighs/atom = 149.79450
+Ave special neighs/atom = 2.0359315
+Neighbor list builds = 256
+Dangerous builds = 0
+
+reset_timestep 0
+timestep ${fire_timesize}
+timestep 50
+velocity all zero linear
+min_style fire/old
+minimize 0.0 0.0 ${fire_step} ${fire_step}
+minimize 0.0 0.0 1000 ${fire_step}
+minimize 0.0 0.0 1000 1000
+WARNING: Using 'neigh_modify every 1 delay 0 check yes' setting during minimization (../min.cpp:187)
+Hybrid pair style last /omp style lj/gromacs/coul/gromacs
+Last active /omp style is improper_style harmonic/omp
+Per MPI rank memory allocation (min/avg/max) = 41.78 | 41.78 | 41.78 Mbytes
+Step Temp TotEng v_m1m2E c_m1m2E 
+       0            0   -27315.335   -130.98103   -130.98103 
+     500 1.7092293e-07   -27315.467   -130.97819   -130.97819 
+    1000 1.1376061e-05   -27315.508   -130.97645   -130.97645 
+Loop time of 3.57908 on 12 procs for 1000 steps with 7236 atoms
+
+1197.8% CPU use with 1 MPI tasks x 12 OpenMP threads
+
+Minimization stats:
+  Stopping criterion = max iterations
+  Energy initial, next-to-last, final = 
+      -27315.334820881  -27315.5086684888  -27315.5087167202
+  Force two-norm initial, final = 2.5652072 0.22232402
+  Force max component initial, final = 0.43730918 0.025593950
+  Final line search alpha, max atom move = 0.0000000 0.0000000
+  Iterations, force evaluations = 1000 1000
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 3.2488     | 3.2488     | 3.2488     |   0.0 | 90.77
+Bond    | 0.093643   | 0.093643   | 0.093643   |   0.0 |  2.62
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0.062367   | 0.062367   | 0.062367   |   0.0 |  1.74
+Output  | 0.00044814 | 0.00044814 | 0.00044814 |   0.0 |  0.01
+Modify  | 0.037596   | 0.037596   | 0.037596   |   0.0 |  1.05
+Other   |            | 0.1362     |            |       |  3.81
+
+Nlocal:        7236.00 ave        7236 max        7236 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:        13098.0 ave       13098 max       13098 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1.08383e+06 ave 1.08383e+06 max 1.08383e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1083833
+Ave neighs/atom = 149.78344
+Ave special neighs/atom = 2.0359315
+Neighbor list builds = 0
+Dangerous builds = 0
+
+#back to regular timestep size
+timestep ${timesize}
+timestep 10
+
+#unfix 123
+
+#velocity all zero linear
+
+#min_style quickmin
+#minimize 0.0 ${forcecon} ${opt_step} ${opt_step}
+#velocity all zero linear
+########################################### the end of test
+    include MD.in
+velocity all create ${Ann_T} ${seed} mom yes rot yes dist gaussian
+velocity all create 400 ${seed} mom yes rot yes dist gaussian
+velocity all create 400 52399 mom yes rot yes dist gaussian
+velocity all scale ${Ann_T}
+velocity all scale 400
+fix 123 ${material_2} spring/self 10.0
+fix 123 Cancer_Cell spring/self 10.0
+fix_modify 123 energy yes
+
+##watch out for shake bond types
+fix 4 all shake 0.0001 20 0 b 94 95
+       0 = # of size 2 clusters
+    2300 = # of size 3 clusters
+       0 = # of size 4 clusters
+       0 = # of frozen angles
+  find clusters CPU = 0.002 seconds
+fix 2 all nvt temp ${Ann_T} 300 ${Tdamp}
+fix 2 all nvt temp 400 300 ${Tdamp}
+fix 2 all nvt temp 400 300 1000
+thermo_style custom step temp etotal v_m1m2E c_m1m2E
+thermo 500
+run	  ${MD_step}
+run	  5000
+Hybrid pair style last /omp style lj/gromacs/coul/gromacs
+Last active /omp style is improper_style harmonic/omp
+Per MPI rank memory allocation (min/avg/max) = 47.28 | 47.28 | 47.28 Mbytes
+Step Temp TotEng v_m1m2E c_m1m2E 
+    1000    507.57089   -19034.499   -130.97645   -130.97645 
+    1500    257.87142   -16107.211   -119.23783   -119.23783 
+    2000    379.14524   -10982.586   -116.29773   -116.29773 
+    2500    358.45754   -11631.485   -120.38512   -120.38512 
+    3000    356.07708   -11709.605   -116.73088   -116.73088 
+    3500    354.28945    -11893.84   -123.34969   -123.34969 
+    4000    342.13356   -12227.603   -118.36945   -118.36945 
+    4500    328.46718   -12745.465   -118.69678   -118.69678 
+    5000      319.658   -13010.796   -120.29077   -120.29077 
+    5500    311.70695   -13343.454   -117.73481   -117.73481 
+    6000    297.61023   -13871.111    -117.4863    -117.4863 
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Loop time of 45.1268 on 12 procs for 5000 steps with 7236 atoms
+
+Performance: 95.730 ns/day, 0.251 hours/ns, 110.799 timesteps/s
+1197.0% CPU use with 1 MPI tasks x 12 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 8.4303     | 8.4303     | 8.4303     |   0.0 | 18.68
+Bond    | 1.0815     | 1.0815     | 1.0815     |   0.0 |  2.40
+Neigh   | 1.8327     | 1.8327     | 1.8327     |   0.0 |  4.06
+Comm    | 7.9453     | 7.9453     | 7.9453     |   0.0 | 17.61
+Output  | 0.0021647  | 0.0021647  | 0.0021647  |   0.0 |  0.00
+Modify  | 23.553     | 23.553     | 23.553     |   0.0 | 52.19
+Other   |            | 2.281      |            |       |  5.06
+
+Nlocal:        7236.00 ave        7236 max        7236 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:        13991.0 ave       13991 max       13991 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1.03442e+06 ave 1.03442e+06 max 1.03442e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1034418
+Ave neighs/atom = 142.95439
+Ave special neighs/atom = 2.0359315
+Neighbor list builds = 498
+Dangerous builds = 495
+unfix 2
+unfix 123
+unfix 4
+    include system_opt.in
+#!!!!!fix 1 all box/relax iso 0. # if PBC is true, you should use this command.
+
+# The following is only for testing which optimzation method works for your current potential function.
+# You should do the test when you conduct this script first time. Then check the log file to keep the workable methods.
+############################################# Test begions
+
+#fix 123 ${material_2} spring/self 10.0
+#fix_modify 123 energy yes
+reset_timestep 0
+thermo 500
+thermo_style custom step temp etotal v_m1m2E c_m1m2E
+
+#min_style sd
+#minimize 0.0 ${forcecon} ${opt_step} ${opt_step}
+
+#min_style hftn
+#minimize 0.0 ${forcecon} ${opt_step} ${opt_step}
+
+#timestep ${timesize}
+min_style cg
+##minimize 0.0 1e-6 ${opt_step1} ${opt_step2} #1w~10w
+minimize 0.0 0.0 ${opt_step1} ${opt_step2} #1w~10w
+minimize 0.0 0.0 20000 ${opt_step2} 
+minimize 0.0 0.0 20000 20000 
+WARNING: Using 'neigh_modify every 1 delay 0 check yes' setting during minimization (../min.cpp:187)
+Hybrid pair style last /omp style lj/gromacs/coul/gromacs
+Last active /omp style is improper_style harmonic/omp
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Per MPI rank memory allocation (min/avg/max) = 44.03 | 44.03 | 44.03 Mbytes
+Step Temp TotEng v_m1m2E c_m1m2E 
+       0    234.53688   -13981.045    -117.4863    -117.4863 
+     500    234.53688   -21302.502   -123.38971   -123.38971 
+    1000    234.53688   -21585.419   -124.99135   -124.99135 
+    1500    234.53688   -21726.631   -122.80202   -122.80202 
+    2000    234.53688    -21802.46   -123.22219   -123.22219 
+    2500    234.53688   -21841.882   -122.76311   -122.76311 
+    3000    234.53688   -21876.646   -122.85682   -122.85682 
+    3500    234.53688   -21909.291   -123.24529   -123.24529 
+    4000    234.53688    -21948.81   -128.80317   -128.80317 
+    4500    234.53688   -21974.341   -126.73549   -126.73549 
+    5000    234.53688    -22003.75   -126.09633   -126.09633 
+    5500    234.53688   -22021.459   -125.34639   -125.34639 
+    6000    234.53688   -22022.942   -125.31687   -125.31687 
+    6500    234.53688   -22023.595   -125.45852   -125.45852 
+    7000    234.53688   -22029.114   -126.04875   -126.04875 
+    7500    234.53688   -22035.389   -125.32093   -125.32093 
+    8000    234.53688   -22035.732   -125.24902   -125.24902 
+    8500    234.53688   -22035.741   -125.16044   -125.16044 
+    9000    234.53688   -22035.745   -125.12844   -125.12844 
+    9500    234.53688   -22036.999   -125.29989   -125.29989 
+   10000    234.53688   -22037.218   -125.19724   -125.19724 
+   10004    234.53688   -22037.218   -125.19647   -125.19647 
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Loop time of 69.6968 on 12 procs for 10004 steps with 7236 atoms
+
+1197.8% CPU use with 1 MPI tasks x 12 OpenMP threads
+
+Minimization stats:
+  Stopping criterion = max force evaluations
+  Energy initial, next-to-last, final = 
+     -19039.1046586968   -27095.278045513  -27095.2780501451
+  Force two-norm initial, final = 489.73824 0.060733462
+  Force max component initial, final = 32.129336 0.0067680051
+  Final line search alpha, max atom move = 1.0000000 0.0067680051
+  Iterations, force evaluations = 10004 20000
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 62.155     | 62.155     | 62.155     |   0.0 | 89.18
+Bond    | 2.0656     | 2.0656     | 2.0656     |   0.0 |  2.96
+Neigh   | 0.7799     | 0.7799     | 0.7799     |   0.0 |  1.12
+Comm    | 1.4405     | 1.4405     | 1.4405     |   0.0 |  2.07
+Output  | 0.0047546  | 0.0047546  | 0.0047546  |   0.0 |  0.01
+Modify  | 0.772      | 0.772      | 0.772      |   0.0 |  1.11
+Other   |            | 2.479      |            |       |  3.56
+
+Nlocal:        7236.00 ave        7236 max        7236 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:        14059.0 ave       14059 max       14059 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1.05761e+06 ave 1.05761e+06 max 1.05761e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1057607
+Ave neighs/atom = 146.15907
+Ave special neighs/atom = 2.0359315
+Neighbor list builds = 196
+Dangerous builds = 0
+
+reset_timestep 0
+timestep ${fire_timesize}
+timestep 50
+velocity all zero linear
+min_style fire/old
+minimize 0.0 0.0 ${fire_step} ${fire_step}
+minimize 0.0 0.0 1000 ${fire_step}
+minimize 0.0 0.0 1000 1000
+WARNING: Using 'neigh_modify every 1 delay 0 check yes' setting during minimization (../min.cpp:187)
+Hybrid pair style last /omp style lj/gromacs/coul/gromacs
+Last active /omp style is improper_style harmonic/omp
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Per MPI rank memory allocation (min/avg/max) = 41.78 | 41.78 | 41.78 Mbytes
+Step Temp TotEng v_m1m2E c_m1m2E 
+       0            0   -27095.278   -125.19647   -125.19647 
+     500 6.3745191e-09   -27095.278   -125.19663   -125.19663 
+    1000 3.3261918e-09   -27095.278    -125.1968    -125.1968 
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Loop time of 3.47184 on 12 procs for 1000 steps with 7236 atoms
+
+1197.7% CPU use with 1 MPI tasks x 12 OpenMP threads
+
+Minimization stats:
+  Stopping criterion = max iterations
+  Energy initial, next-to-last, final = 
+      -27095.278050145  -27095.2781762174  -27095.2781762277
+  Force two-norm initial, final = 0.060733462 0.0067535671
+  Force max component initial, final = 0.0067680051 0.0011261279
+  Final line search alpha, max atom move = 0.0000000 0.0000000
+  Iterations, force evaluations = 1000 1000
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 3.1299     | 3.1299     | 3.1299     |   0.0 | 90.15
+Bond    | 0.09911    | 0.09911    | 0.09911    |   0.0 |  2.85
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0.067154   | 0.067154   | 0.067154   |   0.0 |  1.93
+Output  | 0.00044839 | 0.00044839 | 0.00044839 |   0.0 |  0.01
+Modify  | 0.03853    | 0.03853    | 0.03853    |   0.0 |  1.11
+Other   |            | 0.1367     |            |       |  3.94
+
+Nlocal:        7236.00 ave        7236 max        7236 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:        14066.0 ave       14066 max       14066 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1.05763e+06 ave 1.05763e+06 max 1.05763e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1057630
+Ave neighs/atom = 146.16224
+Ave special neighs/atom = 2.0359315
+Neighbor list builds = 0
+Dangerous builds = 0
+
+#back to regular timestep size
+timestep ${timesize}
+timestep 10
+
+#unfix 123
+
+#velocity all zero linear
+
+#min_style quickmin
+#minimize 0.0 ${forcecon} ${opt_step} ${opt_step}
+#velocity all zero linear
+########################################### the end of test
+####end of initial value setting
+
+#keep all initial relaxation information
+shell cd ${FoldName}
+shell cd STUN_BH_out
+print	"Starting group/group energy = ${m1m2E}" append SABH_check.dat screen no
+#initial structure for MC
+dump 11 all custom 1 MC.xyz id mol type q x y z ix iy iz
+run 0
+Hybrid pair style last /omp style lj/gromacs/coul/gromacs
+Last active /omp style is improper_style harmonic/omp
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Per MPI rank memory allocation (min/avg/max) = 46.83 | 46.83 | 46.83 Mbytes
+Step Temp TotEng v_m1m2E c_m1m2E 
+    1000 3.3261918e-09   -27095.278    -125.1968    -125.1968 
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Loop time of 9.64e-07 on 12 procs for 0 steps with 7236 atoms
+
+207.5% CPU use with 1 MPI tasks x 12 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 0          | 0          | 0          |   0.0 |  0.00
+Bond    | 0          | 0          | 0          |   0.0 |  0.00
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0          | 0          | 0          |   0.0 |  0.00
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Other   |            | 9.64e-07   |            |       |100.00
+
+Nlocal:        7236.00 ave        7236 max        7236 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:        14066.0 ave       14066 max       14066 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1.05763e+06 ave 1.05763e+06 max 1.05763e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1057632
+Ave neighs/atom = 146.16252
+Ave special neighs/atom = 2.0359315
+Neighbor list builds = 0
+Dangerous builds = 0
+undump 11
+
+#initial structure for best
+dump 100 all custom 1 best.xyz id mol type q x y z ix iy iz
+run 0
+Hybrid pair style last /omp style lj/gromacs/coul/gromacs
+Last active /omp style is improper_style harmonic/omp
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Per MPI rank memory allocation (min/avg/max) = 46.83 | 46.83 | 46.83 Mbytes
+Step Temp TotEng v_m1m2E c_m1m2E 
+    1000 3.3261918e-09   -27095.278    -125.1968    -125.1968 
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Loop time of 8.88e-07 on 12 procs for 0 steps with 7236 atoms
+
+112.6% CPU use with 1 MPI tasks x 12 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 0          | 0          | 0          |   0.0 |  0.00
+Bond    | 0          | 0          | 0          |   0.0 |  0.00
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0          | 0          | 0          |   0.0 |  0.00
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Other   |            | 8.88e-07   |            |       |100.00
+
+Nlocal:        7236.00 ave        7236 max        7236 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:        14066.0 ave       14066 max       14066 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1.05763e+06 ave 1.05763e+06 max 1.05763e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1057632
+Ave neighs/atom = 146.16252
+Ave special neighs/atom = 2.0359315
+Neighbor list builds = 0
+Dangerous builds = 0
+undump 100
+shell cd ..
+#in main dir for re_run purpose
+
+#assign initial values for the following two
+thermo_style custom step temp etotal c_m1m2E v_m1m2E
+thermo 100
+run		0
+Hybrid pair style last /omp style lj/gromacs/coul/gromacs
+Last active /omp style is improper_style harmonic/omp
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Per MPI rank memory allocation (min/avg/max) = 44.78 | 44.78 | 44.78 Mbytes
+Step Temp TotEng c_m1m2E v_m1m2E 
+    1000 3.3261918e-09   -27095.278    -125.1968    -125.1968 
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Loop time of 8.86e-07 on 12 procs for 0 steps with 7236 atoms
+
+225.7% CPU use with 1 MPI tasks x 12 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 0          | 0          | 0          |   0.0 |  0.00
+Bond    | 0          | 0          | 0          |   0.0 |  0.00
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0          | 0          | 0          |   0.0 |  0.00
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Other   |            | 8.86e-07   |            |       |100.00
+
+Nlocal:        7236.00 ave        7236 max        7236 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:        14066.0 ave       14066 max       14066 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1.05763e+06 ave 1.05763e+06 max 1.05763e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1057632
+Ave neighs/atom = 146.16252
+Ave special neighs/atom = 2.0359315
+Neighbor list builds = 0
+Dangerous builds = 0
+variable Enmin_G equal ${m1m2E}
+variable Enmin_G equal -125.196804947882
+
+#variable Enstart_G equal ${m1m2E} #the inital value for searching the more stabe configuration
+# equation for stun algorithm
+variable eST_G equal  ln((v_m1m2E-v_Enmin_G)+sqrt((v_m1m2E-v_Enmin_G)*(v_m1m2E-v_Enmin_G)+1)) #1-exp(-0.05*(v_GrpGrpEng-v_Enmin_G)/count(all)) #-0.05(�אּ�����h���l���O�̮z)
+### The upper bound of ${eST} is 1, and 0 for energy=Enmin. negative when we find a structure with a lower energy
+variable STUN_last_G equal ${eST_G} #initial value for the last kept
+variable STUN_last_G equal 0 
+
+#counter
+variable naccept_G equal 0
+variable increment_G equal v_naccept_G+1 # for counting MC accepting number
+variable nbetter equal 0
+variable incrbetter equal v_nbetter+1 # for labelling the better configuration of one inner bh loop
+
+variable BH_No loop ${bhloop}
+variable BH_No loop 1000
+
+#shell cd ${FoldName}
+#	dump 100 all custom 1 best.xyz id mol type q x y z ix iy iz
+#	run 0
+#	undump 100
+#shell cd ..
+
+
+### Main BH_loop Start ###################
+label BH_loop
+print "adjust_ratio.in at ****BH_No: ${BH_No}"
+adjust_ratio.in at ****BH_No: 1
+
+    include adjust_ratio.in ###need check
+variable redundance equal ${BH_No}%${kT_adj} #small loop
+variable redundance equal 1%${kT_adj} 
+variable redundance equal 1%20 
+
+if " ${redundance} == 0" then "jump adjust_ratio.in adj_1" else "jump adjust_ratio.in adj_end"
+jump adjust_ratio.in adj_end
+
+#************ DMD ********************
+#print "DMD at ****BH_No: ${BH_No}"
+#    reset_timestep 0
+#    include all_data_mix100.in
+#    include system_opt.in
+#    include DMD.in
+
+#************ MD  *******************
+print "MD at ****BH_No: ${BH_No}"
+MD at ****BH_No: 1
+    reset_timestep 0
+    include all_data_mix.in
+#pair_coeff  	* 	* 	 lj/gromacs 				0.0000 	0.2 	0.001 	0.5
+pair_coeff  	* 	* 	 lj/gromacs/coul/gromacs	0.0000 	0.10
+pair_coeff		1   1    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C1 C1
+pair_coeff		1   2    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C1 C2
+pair_coeff		1   3    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C1 C3
+pair_coeff		1   4    lj/gromacs/coul/gromacs	0.7409  4.7000 	# C1 C5
+pair_coeff		1   5    lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 N0
+pair_coeff		1   6    lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 P1
+pair_coeff		1   7    lj/gromacs/coul/gromacs	0.4780  4.7000 	# C1 P4
+pair_coeff		1   8    lj/gromacs/coul/gromacs	0.4780  4.7000 	# C1 P5
+pair_coeff		1   9    lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 Qa
+pair_coeff		1   10   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 Qd
+pair_coeff		1   11   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C1 SC4
+pair_coeff		1   12   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C1 SC5
+pair_coeff		1   13   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 SNd
+pair_coeff		1   14   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 SP1
+pair_coeff		1   15   lj/gromacs/coul/gromacs	0.4541  4.7000 	# C1 POL
+pair_coeff		1   18   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 Qa
+pair_coeff		1   19   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 Qd
+pair_coeff		1   20   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 Q0
+pair_coeff		1   21   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C1 SC2
+pair_coeff		1   22   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 SN0
+pair_coeff		1   23   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TA2
+pair_coeff		1   24   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TA3
+pair_coeff		1   25   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TG2
+pair_coeff		1   26   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 TG3
+pair_coeff		1   27   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TN0
+pair_coeff		1   28   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TNa
+pair_coeff		1   29   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 TT2
+pair_coeff		1   30   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TT3
+pair_coeff		1   31   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C1 TY2
+pair_coeff		1   32   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C1 TY3
+pair_coeff		2   2    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C2 C2
+pair_coeff		2   3    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C2 C3
+pair_coeff		2   4    lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 C5
+pair_coeff		2   5    lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 N0
+pair_coeff		2   6    lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 P1
+pair_coeff		2   7    lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 P4
+pair_coeff		2   8    lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 P5
+pair_coeff		2   9    lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 Qa
+pair_coeff		2   10   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 Qd
+pair_coeff		2   11   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 SC4
+pair_coeff		2   12   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 SC5
+pair_coeff		2   13   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C2 SNd
+pair_coeff		2   14   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 SP1
+pair_coeff		2   15   lj/gromacs/coul/gromacs	0.5222  4.7000 	# C2 POL
+pair_coeff		2   18   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 Qa
+pair_coeff		2   19   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 Qd
+pair_coeff		2   20   lj/gromacs/coul/gromacs	0.5497  4.7000 	# C2 Q0
+pair_coeff		2   21   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C2 SC2
+pair_coeff		2   22   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 SN0
+pair_coeff		2   23   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 TA2
+pair_coeff		2   24   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 TA3
+pair_coeff		2   25   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 TG2
+pair_coeff		2   26   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C2 TG3
+pair_coeff		2   27   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 TN0
+pair_coeff		2   28   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C2 TNa
+pair_coeff		2   29   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C2 TT2
+pair_coeff		2   30   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C2 TT3
+pair_coeff		2   31   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C2 TY2
+pair_coeff		2   32   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C2 TY3
+pair_coeff		3   3    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 C3
+pair_coeff		3   4    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 C5
+pair_coeff		3   5    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 N0
+pair_coeff		3   6    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 P1
+pair_coeff		3   7    lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 P4
+pair_coeff		3   8    lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 P5
+pair_coeff		3   9    lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 Qa
+pair_coeff		3   10   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 Qd
+pair_coeff		3   11   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 SC4
+pair_coeff		3   12   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 SC5
+pair_coeff		3   13   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 SNd
+pair_coeff		3   14   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 SP1
+pair_coeff		3   15   lj/gromacs/coul/gromacs	0.6130  4.7000 	# C3 POL
+pair_coeff		3   18   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 Qa
+pair_coeff		3   19   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 Qd
+pair_coeff		3   20   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 Q0
+pair_coeff		3   21   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 SC2
+pair_coeff		3   22   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 SN0
+pair_coeff		3   23   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 TA2
+pair_coeff		3   24   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 TA3
+pair_coeff		3   25   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 TG2
+pair_coeff		3   26   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C3 TG3
+pair_coeff		3   27   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 TN0
+pair_coeff		3   28   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 TNa
+pair_coeff		3   29   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C3 TT2
+pair_coeff		3   30   lj/gromacs/coul/gromacs	0.6453  4.7000 	# C3 TT3
+pair_coeff		3   31   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C3 TY2
+pair_coeff		3   32   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C3 TY3
+pair_coeff		4   4    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 C5
+pair_coeff		4   5    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 N0
+pair_coeff		4   6    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 P1
+pair_coeff		4   7    lj/gromacs/coul/gromacs	0.7409  4.7000 	# C5 P4
+pair_coeff		4   8    lj/gromacs/coul/gromacs	0.7409  4.7000 	# C5 P5
+pair_coeff		4   9    lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 Qa
+pair_coeff		4   10   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 Qd
+pair_coeff		4   11   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 SC4
+pair_coeff		4   12   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 SC5
+pair_coeff		4   13   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 SNd
+pair_coeff		4   14   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 SP1
+pair_coeff		4   15   lj/gromacs/coul/gromacs	0.7039  4.7000 	# C5 POL
+pair_coeff		4   18   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 Qa
+pair_coeff		4   19   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 Qd
+pair_coeff		4   20   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 Q0
+pair_coeff		4   21   lj/gromacs/coul/gromacs	0.7409  4.7000 	# C5 SC2
+pair_coeff		4   22   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 SN0
+pair_coeff		4   23   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TA2
+pair_coeff		4   24   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TA3
+pair_coeff		4   25   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TG2
+pair_coeff		4   26   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TG3
+pair_coeff		4   27   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TN0
+pair_coeff		4   28   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TNa
+pair_coeff		4   29   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TT2
+pair_coeff		4   30   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TT3
+pair_coeff		4   31   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TY2
+pair_coeff		4   32   lj/gromacs/coul/gromacs	0.8365  4.7000 	# C5 TY3
+pair_coeff		5   5    lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 N0
+pair_coeff		5   6    lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 P1
+pair_coeff		5   7    lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 P4
+pair_coeff		5   8    lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 P5
+pair_coeff		5   9    lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 Qa
+pair_coeff		5   10   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 Qd
+pair_coeff		5   11   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 SC4
+pair_coeff		5   12   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 SC5
+pair_coeff		5   13   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 SNd
+pair_coeff		5   14   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 SP1
+pair_coeff		5   15   lj/gromacs/coul/gromacs	0.7947  4.7000 	# N0 POL
+pair_coeff		5   18   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 Qa
+pair_coeff		5   19   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 Qd
+pair_coeff		5   20   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 Q0
+pair_coeff		5   21   lj/gromacs/coul/gromacs	0.7409  4.7000 	# N0 SC2
+pair_coeff		5   22   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 SN0
+pair_coeff		5   23   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 TA2
+pair_coeff		5   24   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 TA3
+pair_coeff		5   25   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 TG2
+pair_coeff		5   26   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 TG3
+pair_coeff		5   27   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 TN0
+pair_coeff		5   28   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 TNa
+pair_coeff		5   29   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 TT2
+pair_coeff		5   30   lj/gromacs/coul/gromacs	0.8365  4.7000 	# N0 TT3
+pair_coeff		5   31   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 TY2
+pair_coeff		5   32   lj/gromacs/coul/gromacs	0.9560  4.7000 	# N0 TY3
+pair_coeff		6   6    lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 P1
+pair_coeff		6   7    lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 P4
+pair_coeff		6   8    lj/gromacs/coul/gromacs	1.3384  4.7000 	# P1 P5
+pair_coeff		6   9    lj/gromacs/coul/gromacs	1.3384  4.7000 	# P1 Qa
+pair_coeff		6   10   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P1 Qd
+pair_coeff		6   11   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P1 SC4
+pair_coeff		6   12   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P1 SC5
+pair_coeff		6   13   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 SNd
+pair_coeff		6   14   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 SP1
+pair_coeff		6   15   lj/gromacs/coul/gromacs	1.0217  4.7000 	# P1 POL
+pair_coeff		6   18   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P1 Qa
+pair_coeff		6   19   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P1 Qd
+pair_coeff		6   20   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 Q0
+pair_coeff		6   21   lj/gromacs/coul/gromacs	0.7409  4.7000 	# P1 SC2
+pair_coeff		6   22   lj/gromacs/coul/gromacs	0.9560  4.7000 	# P1 SN0
+pair_coeff		6   23   lj/gromacs/coul/gromacs	0.9560  4.7000 	# P1 TA2
+pair_coeff		6   24   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TA3
+pair_coeff		6   25   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TG2
+pair_coeff		6   26   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TG3
+pair_coeff		6   27   lj/gromacs/coul/gromacs	0.9560  4.7000 	# P1 TN0
+pair_coeff		6   28   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TNa
+pair_coeff		6   29   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TT2
+pair_coeff		6   30   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TT3
+pair_coeff		6   31   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TY2
+pair_coeff		6   32   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P1 TY3
+pair_coeff		7   7    lj/gromacs/coul/gromacs	1.1950  4.7000 	# P4 P4
+pair_coeff		7   8    lj/gromacs/coul/gromacs	1.3384  4.7000 	# P4 P5
+pair_coeff		7   9    lj/gromacs/coul/gromacs	1.3384  4.7000 	# P4 Qa
+pair_coeff		7   10   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P4 Qd
+pair_coeff		7   11   lj/gromacs/coul/gromacs	0.6453  4.7000 	# P4 SC4
+pair_coeff		7   12   lj/gromacs/coul/gromacs	0.7409  4.7000 	# P4 SC5
+pair_coeff		7   13   lj/gromacs/coul/gromacs	0.9560  4.7000 	# P4 SNd
+pair_coeff		7   14   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 SP1
+pair_coeff		7   15   lj/gromacs/coul/gromacs	1.1353  4.7000 	# P4 POL
+pair_coeff		7   18   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P4 Qa
+pair_coeff		7   19   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P4 Qd
+pair_coeff		7   20   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P4 Q0
+pair_coeff		7   21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# P4 SC2
+pair_coeff		7   22   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P4 SN0
+pair_coeff		7   23   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P4 TA2
+pair_coeff		7   24   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 TA3
+pair_coeff		7   25   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 TG2
+pair_coeff		7   26   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 TG3
+pair_coeff		7   27   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P4 TN0
+pair_coeff		7   28   lj/gromacs/coul/gromacs	0.9560  4.7000 	# P4 TNa
+pair_coeff		7   29   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 TT2
+pair_coeff		7   30   lj/gromacs/coul/gromacs	0.9560  4.7000 	# P4 TT3
+pair_coeff		7   31   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 TY2
+pair_coeff		7   32   lj/gromacs/coul/gromacs	1.0755  4.7000 	# P4 TY3
+pair_coeff		8   8    lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 P5
+pair_coeff		8   9    lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 Qa
+pair_coeff		8   10   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 Qd
+pair_coeff		8   11   lj/gromacs/coul/gromacs	0.6453  4.7000 	# P5 SC4
+pair_coeff		8   12   lj/gromacs/coul/gromacs	0.7409  4.7000 	# P5 SC5
+pair_coeff		8   13   lj/gromacs/coul/gromacs	1.1950  4.7000 	# P5 SNd
+pair_coeff		8   14   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 SP1
+pair_coeff		8   15   lj/gromacs/coul/gromacs	1.2715  4.7000 	# P5 POL
+pair_coeff		8   18   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 Qa
+pair_coeff		8   19   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 Qd
+pair_coeff		8   20   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 Q0
+pair_coeff		8   21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# P5 SC2
+pair_coeff		8   22   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P5 SN0
+pair_coeff		8   23   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P5 TA2
+pair_coeff		8   24   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 TA3
+pair_coeff		8   25   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 TG2
+pair_coeff		8   26   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 TG3
+pair_coeff		8   27   lj/gromacs/coul/gromacs	0.8365  4.7000 	# P5 TN0
+pair_coeff		8   28   lj/gromacs/coul/gromacs	1.1950  4.7000 	# P5 TNa
+pair_coeff		8   29   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 TT2
+pair_coeff		8   30   lj/gromacs/coul/gromacs	1.1950  4.7000 	# P5 TT3
+pair_coeff		8   31   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 TY2
+pair_coeff		8   32   lj/gromacs/coul/gromacs	1.3384  4.7000 	# P5 TY3
+pair_coeff		9   9    lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qa Qa
+pair_coeff		9   10   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa Qd
+pair_coeff		9   11   lj/gromacs/coul/gromacs	0.7409  4.7000 	# Qa SC4
+pair_coeff		9   12   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qa SC5
+pair_coeff		9   13   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa SNd
+pair_coeff		9   14   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa SP1
+pair_coeff		9   15   lj/gromacs/coul/gromacs	1.1950  4.7000 	# Qa POL
+pair_coeff		9   18   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qa Qa
+pair_coeff		9   19   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa Qd
+pair_coeff		9   20   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qa Q0
+pair_coeff		9   21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qa SC2
+pair_coeff		9   22   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa SN0
+pair_coeff		9   23   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa TA2
+pair_coeff		9   24   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TA3
+pair_coeff		9   25   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TG2
+pair_coeff		9   26   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TG3
+pair_coeff		9   27   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa TN0
+pair_coeff		9   28   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Qa TNa
+pair_coeff		9   29   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TT2
+pair_coeff		9   30   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Qa TT3
+pair_coeff		9   31   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TY2
+pair_coeff		9   32   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TY3
+pair_coeff		10  10   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qd Qd
+pair_coeff		10  11   lj/gromacs/coul/gromacs	0.7409  4.7000 	# Qd SC4
+pair_coeff		10  12   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qd SC5
+pair_coeff		10  13   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Qd SNd
+pair_coeff		10  14   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd SP1
+pair_coeff		10  15   lj/gromacs/coul/gromacs	1.1950  4.7000 	# Qd POL
+pair_coeff		10  18   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd Qa
+pair_coeff		10  19   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qd Qd
+pair_coeff		10  20   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qd Q0
+pair_coeff		10  21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qd SC2
+pair_coeff		10  22   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd SN0
+pair_coeff		10  23   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd TA2
+pair_coeff		10  24   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TA3
+pair_coeff		10  25   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TG2
+pair_coeff		10  26   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TG3
+pair_coeff		10  27   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd TN0
+pair_coeff		10  28   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TNa
+pair_coeff		10  29   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TT2
+pair_coeff		10  30   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TT3
+pair_coeff		10  31   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TY2
+pair_coeff		10  32   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TY3
+pair_coeff		11  11   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 SC4
+pair_coeff		11  12   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 SC5
+pair_coeff		11  13   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC4 SNd
+pair_coeff		11  14   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 SP1
+pair_coeff		11  15   lj/gromacs/coul/gromacs	0.6130  4.7000 	# SC4 POL
+pair_coeff		11  18   lj/gromacs/coul/gromacs	0.7409  4.7000 	# SC4 Qa
+pair_coeff		11  19   lj/gromacs/coul/gromacs	0.7409  4.7000 	# SC4 Qd
+pair_coeff		11  20   lj/gromacs/coul/gromacs	0.7409  4.7000 	# SC4 Q0
+pair_coeff		11  21   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC4 SC2
+pair_coeff		11  22   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 SN0
+pair_coeff		11  23   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TA2
+pair_coeff		11  24   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TA3
+pair_coeff		11  25   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TG2
+pair_coeff		11  26   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TG3
+pair_coeff		11  27   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TN0
+pair_coeff		11  28   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC4 TNa
+pair_coeff		11  29   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TT2
+pair_coeff		11  30   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC4 TT3
+pair_coeff		11  31   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TY2
+pair_coeff		11  32   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC4 TY3
+pair_coeff		12  12   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 SC5
+pair_coeff		12  13   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 SNd
+pair_coeff		12  14   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 SP1
+pair_coeff		12  15   lj/gromacs/coul/gromacs	0.7039  4.7000 	# SC5 POL
+pair_coeff		12  18   lj/gromacs/coul/gromacs	0.8365  4.7000 	# SC5 Qa
+pair_coeff		12  19   lj/gromacs/coul/gromacs	0.8365  4.7000 	# SC5 Qd
+pair_coeff		12  20   lj/gromacs/coul/gromacs	0.8365  4.7000 	# SC5 Q0
+pair_coeff		12  21   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC5 SC2
+pair_coeff		12  22   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 SN0
+pair_coeff		12  23   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TA2
+pair_coeff		12  24   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TA3
+pair_coeff		12  25   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TG2
+pair_coeff		12  26   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TG3
+pair_coeff		12  27   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TN0
+pair_coeff		12  28   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TNa
+pair_coeff		12  29   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TT2
+pair_coeff		12  30   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TT3
+pair_coeff		12  31   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TY2
+pair_coeff		12  32   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC5 TY3
+pair_coeff		13  13   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SNd SNd
+pair_coeff		13  14   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd SP1
+pair_coeff		13  15   lj/gromacs/coul/gromacs	0.9082  4.7000 	# SNd POL
+pair_coeff		13  18   lj/gromacs/coul/gromacs	1.3384  4.7000 	# SNd Qa
+pair_coeff		13  19   lj/gromacs/coul/gromacs	1.0755  4.7000 	# SNd Qd
+pair_coeff		13  20   lj/gromacs/coul/gromacs	1.0755  4.7000 	# SNd Q0
+pair_coeff		13  21   lj/gromacs/coul/gromacs	0.4840  4.3000 	# SNd SC2
+pair_coeff		13  22   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SNd SN0
+pair_coeff		13  23   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SNd TA2
+pair_coeff		13  24   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TA3
+pair_coeff		13  25   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TG2
+pair_coeff		13  26   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TG3
+pair_coeff		13  27   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SNd TN0
+pair_coeff		13  28   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TNa
+pair_coeff		13  29   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TT2
+pair_coeff		13  30   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TT3
+pair_coeff		13  31   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TY2
+pair_coeff		13  32   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SNd TY3
+pair_coeff		14  14   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 SP1
+pair_coeff		14  15   lj/gromacs/coul/gromacs	1.0217  4.7000 	# SP1 POL
+pair_coeff		14  18   lj/gromacs/coul/gromacs	1.3384  4.7000 	# SP1 Qa
+pair_coeff		14  19   lj/gromacs/coul/gromacs	1.3384  4.7000 	# SP1 Qd
+pair_coeff		14  20   lj/gromacs/coul/gromacs	1.0755  4.7000 	# SP1 Q0
+pair_coeff		14  21   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SP1 SC2
+pair_coeff		14  22   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SP1 SN0
+pair_coeff		14  23   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SP1 TA2
+pair_coeff		14  24   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TA3
+pair_coeff		14  25   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TG2
+pair_coeff		14  26   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TG3
+pair_coeff		14  27   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SP1 TN0
+pair_coeff		14  28   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TNa
+pair_coeff		14  29   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TT2
+pair_coeff		14  30   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TT3
+pair_coeff		14  31   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TY2
+pair_coeff		14  32   lj/gromacs/coul/gromacs	0.8066  4.3000 	# SP1 TY3
+pair_coeff		15  15   lj/gromacs/coul/gromacs	0.9560  4.7000 	# POL POL
+pair_coeff		15  18   lj/gromacs/coul/gromacs	1.1950  4.7000 	# POL Qa
+pair_coeff		15  19   lj/gromacs/coul/gromacs	1.1950  4.7000 	# POL Qd
+pair_coeff		15  20   lj/gromacs/coul/gromacs	1.0755  4.7000 	# POL Q0
+pair_coeff		15  21   lj/gromacs/coul/gromacs	0.5222  4.7000 	# POL SC2
+pair_coeff		15  22   lj/gromacs/coul/gromacs	0.7947  4.7000 	# POL SN0
+pair_coeff		15  23   lj/gromacs/coul/gromacs	0.7947  4.7000 	# POL TA2
+pair_coeff		15  24   lj/gromacs/coul/gromacs	1.0217  4.7000 	# POL TA3
+pair_coeff		15  25   lj/gromacs/coul/gromacs	1.0217  4.7000 	# POL TG2
+pair_coeff		15  26   lj/gromacs/coul/gromacs	1.0217  4.7000 	# POL TG3
+pair_coeff		15  27   lj/gromacs/coul/gromacs	0.7947  4.7000 	# POL TN0
+pair_coeff		15  28   lj/gromacs/coul/gromacs	0.9082  4.7000 	# POL TNa
+pair_coeff		15  29   lj/gromacs/coul/gromacs	1.0217  4.7000 	# POL TT2
+pair_coeff		15  30   lj/gromacs/coul/gromacs	0.9082  4.7000 	# POL TT3
+pair_coeff		15  31   lj/gromacs/coul/gromacs	1.0217  4.7000 	# POL TY2
+pair_coeff		15  32   lj/gromacs/coul/gromacs	1.0217  4.7000 	# POL TY3
+pair_coeff		18  18   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qa Qa
+pair_coeff		18  19   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa Qd
+pair_coeff		18  20   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qa Q0
+pair_coeff		18  21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qa SC2
+pair_coeff		18  22   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa SN0
+pair_coeff		18  23   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa TA2
+pair_coeff		18  24   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TA3
+pair_coeff		18  25   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TG2
+pair_coeff		18  26   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TG3
+pair_coeff		18  27   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qa TN0
+pair_coeff		18  28   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Qa TNa
+pair_coeff		18  29   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TT2
+pair_coeff		18  30   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Qa TT3
+pair_coeff		18  31   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TY2
+pair_coeff		18  32   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qa TY3
+pair_coeff		19  19   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Qd Qd
+pair_coeff		19  20   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qd Q0
+pair_coeff		19  21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Qd SC2
+pair_coeff		19  22   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd SN0
+pair_coeff		19  23   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd TA2
+pair_coeff		19  24   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TA3
+pair_coeff		19  25   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TG2
+pair_coeff		19  26   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TG3
+pair_coeff		19  27   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Qd TN0
+pair_coeff		19  28   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TNa
+pair_coeff		19  29   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TT2
+pair_coeff		19  30   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TT3
+pair_coeff		19  31   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TY2
+pair_coeff		19  32   lj/gromacs/coul/gromacs	1.3384  4.7000 	# Qd TY3
+pair_coeff		20  20   lj/gromacs/coul/gromacs	0.8365  4.7000 	# Q0 Q0
+pair_coeff		20  21   lj/gromacs/coul/gromacs	0.5497  4.7000 	# Q0 SC2
+pair_coeff		20  22   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Q0 SN0
+pair_coeff		20  23   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Q0 TA2
+pair_coeff		20  24   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Q0 TA3
+pair_coeff		20  25   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Q0 TG2
+pair_coeff		20  26   lj/gromacs/coul/gromacs	1.1950  4.7000 	# Q0 TG3
+pair_coeff		20  27   lj/gromacs/coul/gromacs	0.9560  4.7000 	# Q0 TN0
+pair_coeff		20  28   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Q0 TNa
+pair_coeff		20  29   lj/gromacs/coul/gromacs	1.1950  4.7000 	# Q0 TT2
+pair_coeff		20  30   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Q0 TT3
+pair_coeff		20  31   lj/gromacs/coul/gromacs	1.1950  4.7000 	# Q0 TY2
+pair_coeff		20  32   lj/gromacs/coul/gromacs	1.0755  4.7000 	# Q0 TY3
+pair_coeff		21  21   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SC2 SC2
+pair_coeff		21  22   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC2 SN0
+pair_coeff		21  23   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC2 TA2
+pair_coeff		21  24   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC2 TA3
+pair_coeff		21  25   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC2 TG2
+pair_coeff		21  26   lj/gromacs/coul/gromacs	0.4840  4.3000 	# SC2 TG3
+pair_coeff		21  27   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC2 TN0
+pair_coeff		21  28   lj/gromacs/coul/gromacs	0.4840  4.3000 	# SC2 TNa
+pair_coeff		21  29   lj/gromacs/coul/gromacs	0.4840  4.3000 	# SC2 TT2
+pair_coeff		21  30   lj/gromacs/coul/gromacs	0.4840  4.3000 	# SC2 TT3
+pair_coeff		21  31   lj/gromacs/coul/gromacs	0.4840  4.3000 	# SC2 TY2
+pair_coeff		21  32   lj/gromacs/coul/gromacs	0.5557  4.3000 	# SC2 TY3
+pair_coeff		22  22   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SN0 SN0
+pair_coeff		22  23   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SN0 TA2
+pair_coeff		22  24   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SN0 TA3
+pair_coeff		22  25   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SN0 TG2
+pair_coeff		22  26   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SN0 TG3
+pair_coeff		22  27   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SN0 TN0
+pair_coeff		22  28   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SN0 TNa
+pair_coeff		22  29   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SN0 TT2
+pair_coeff		22  30   lj/gromacs/coul/gromacs	0.6274  4.3000 	# SN0 TT3
+pair_coeff		22  31   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SN0 TY2
+pair_coeff		22  32   lj/gromacs/coul/gromacs	0.7170  4.3000 	# SN0 TY3
+pair_coeff		23  23   lj/gromacs/coul/gromacs	0.5497  3.2000 	# TA2 TA2
+pair_coeff		23  24   lj/gromacs/coul/gromacs	0.6453  3.2000 	# TA2 TA3
+pair_coeff		23  25   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TA2 TG2
+pair_coeff		23  26   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TA2 TG3
+pair_coeff		23  27   lj/gromacs/coul/gromacs	0.6274  3.2000 	# TA2 TN0
+pair_coeff		23  28   lj/gromacs/coul/gromacs	0.6274  3.2000 	# TA2 TNa
+pair_coeff		23  29   lj/gromacs/coul/gromacs	1.1950  3.2000 	# TA2 TT2
+pair_coeff		23  30   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TA2 TT3
+pair_coeff		23  31   lj/gromacs/coul/gromacs	0.6453  3.2000 	# TA2 TY2
+pair_coeff		23  32   lj/gromacs/coul/gromacs	0.8365  3.2000 	# TA2 TY3
+pair_coeff		24  24   lj/gromacs/coul/gromacs	0.6453  3.2000 	# TA3 TA3
+pair_coeff		24  25   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TA3 TG2
+pair_coeff		24  26   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TA3 TG3
+pair_coeff		24  27   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TA3 TN0
+pair_coeff		24  28   lj/gromacs/coul/gromacs	0.8066  3.2000 	# TA3 TNa
+pair_coeff		24  29   lj/gromacs/coul/gromacs	1.0755  3.2000 	# TA3 TT2
+pair_coeff		24  30   lj/gromacs/coul/gromacs	1.1950  3.2000 	# TA3 TT3
+pair_coeff		24  31   lj/gromacs/coul/gromacs	0.8365  3.2000 	# TA3 TY2
+pair_coeff		24  32   lj/gromacs/coul/gromacs	0.6453  3.2000 	# TA3 TY3
+pair_coeff		25  25   lj/gromacs/coul/gromacs	0.4780  3.2000 	# TG2 TG2
+pair_coeff		25  26   lj/gromacs/coul/gromacs	0.4780  3.2000 	# TG2 TG3
+pair_coeff		25  27   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TG2 TN0
+pair_coeff		25  28   lj/gromacs/coul/gromacs	0.8066  3.2000 	# TG2 TNa
+pair_coeff		25  29   lj/gromacs/coul/gromacs	0.8365  3.2000 	# TG2 TT2
+pair_coeff		25  30   lj/gromacs/coul/gromacs	0.7409  3.2000 	# TG2 TT3
+pair_coeff		25  31   lj/gromacs/coul/gromacs	1.5535  3.2000 	# TG2 TY2
+pair_coeff		25  32   lj/gromacs/coul/gromacs	1.4818  3.2000 	# TG2 TY3
+pair_coeff		26  26   lj/gromacs/coul/gromacs	0.4780  3.2000 	# TG3 TG3
+pair_coeff		26  27   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TG3 TN0
+pair_coeff		26  28   lj/gromacs/coul/gromacs	0.8066  3.2000 	# TG3 TNa
+pair_coeff		26  29   lj/gromacs/coul/gromacs	0.7409  3.2000 	# TG3 TT2
+pair_coeff		26  30   lj/gromacs/coul/gromacs	0.8365  3.2000 	# TG3 TT3
+pair_coeff		26  31   lj/gromacs/coul/gromacs	1.4818  3.2000 	# TG3 TY2
+pair_coeff		26  32   lj/gromacs/coul/gromacs	1.5535  3.2000 	# TG3 TY3
+pair_coeff		27  27   lj/gromacs/coul/gromacs	0.6274  3.2000 	# TN0 TN0
+pair_coeff		27  28   lj/gromacs/coul/gromacs	0.6274  3.2000 	# TN0 TNa
+pair_coeff		27  29   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TN0 TT2
+pair_coeff		27  30   lj/gromacs/coul/gromacs	0.6274  3.2000 	# TN0 TT3
+pair_coeff		27  31   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TN0 TY2
+pair_coeff		27  32   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TN0 TY3
+pair_coeff		28  28   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TNa TNa
+pair_coeff		28  29   lj/gromacs/coul/gromacs	0.8066  3.2000 	# TNa TT2
+pair_coeff		28  30   lj/gromacs/coul/gromacs	0.7170  3.2000 	# TNa TT3
+pair_coeff		28  31   lj/gromacs/coul/gromacs	0.8066  3.2000 	# TNa TY2
+pair_coeff		28  32   lj/gromacs/coul/gromacs	0.8066  3.2000 	# TNa TY3
+pair_coeff		29  29   lj/gromacs/coul/gromacs	1.0755  3.2000 	# TT2 TT2
+pair_coeff		29  30   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TT2 TT3
+pair_coeff		29  31   lj/gromacs/coul/gromacs	1.1950  3.2000 	# TT2 TY2
+pair_coeff		29  32   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TT2 TY3
+pair_coeff		30  30   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TT3 TT3
+pair_coeff		30  31   lj/gromacs/coul/gromacs	0.9560  3.2000 	# TT3 TY2
+pair_coeff		30  32   lj/gromacs/coul/gromacs	1.1950  3.2000 	# TT3 TY3
+pair_coeff		31  31   lj/gromacs/coul/gromacs	0.8365  3.2000 	# TY2 TY2
+pair_coeff		31  32   lj/gromacs/coul/gromacs	0.6453  3.2000 	# TY2 TY3
+pair_coeff		32  32   lj/gromacs/coul/gromacs	0.8365  3.2000 	# TY3 TY3
+    include system_opt.in
+#!!!!!fix 1 all box/relax iso 0. # if PBC is true, you should use this command.
+
+# The following is only for testing which optimzation method works for your current potential function.
+# You should do the test when you conduct this script first time. Then check the log file to keep the workable methods.
+############################################# Test begions
+
+#fix 123 ${material_2} spring/self 10.0
+#fix_modify 123 energy yes
+reset_timestep 0
+thermo 500
+thermo_style custom step temp etotal v_m1m2E c_m1m2E
+
+#min_style sd
+#minimize 0.0 ${forcecon} ${opt_step} ${opt_step}
+
+#min_style hftn
+#minimize 0.0 ${forcecon} ${opt_step} ${opt_step}
+
+#timestep ${timesize}
+min_style cg
+##minimize 0.0 1e-6 ${opt_step1} ${opt_step2} #1w~10w
+minimize 0.0 0.0 ${opt_step1} ${opt_step2} #1w~10w
+minimize 0.0 0.0 20000 ${opt_step2} 
+minimize 0.0 0.0 20000 20000 
+WARNING: Using 'neigh_modify every 1 delay 0 check yes' setting during minimization (../min.cpp:187)
+Hybrid pair style last /omp style lj/gromacs/coul/gromacs
+Last active /omp style is improper_style harmonic/omp
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Per MPI rank memory allocation (min/avg/max) = 44.03 | 44.03 | 44.03 Mbytes
+Step Temp TotEng v_m1m2E c_m1m2E 
+       0 3.3261918e-09   -27095.278    -125.1968    -125.1968 
+     500 3.3261918e-09   -27095.281   -125.25371   -125.25371 
+    1000 3.3261918e-09   -27095.283   -125.31385   -125.31385 
+    1500 3.3261918e-09   -27095.285   -125.26478   -125.26478 
+    2000 3.3261918e-09   -27095.286   -125.29134   -125.29134 
+    2500 3.3261918e-09   -27095.286   -125.29584   -125.29584 
+    3000 3.3261918e-09   -27095.286   -125.26169   -125.26169 
+    3500 3.3261918e-09   -27095.287   -125.29113   -125.29113 
+    4000 3.3261918e-09   -27095.287   -125.27954   -125.27954 
+    4500 3.3261918e-09   -27095.287   -125.29014   -125.29014 
+    5000 3.3261918e-09   -27095.287    -125.2802    -125.2802 
+    5500 3.3261918e-09   -27095.287   -125.27971   -125.27971 
+    6000 3.3261918e-09   -27095.287   -125.28203   -125.28203 
+    6500 3.3261918e-09   -27095.287   -125.28415   -125.28415 
+    7000 3.3261918e-09   -27095.287   -125.28302   -125.28302 
+    7500 3.3261918e-09   -27095.287   -125.28289   -125.28289 
+    8000 3.3261918e-09   -27095.287   -125.28183   -125.28183 
+    8500 3.3261918e-09   -27095.287   -125.28277   -125.28277 
+    9000 3.3261918e-09   -27095.287   -125.28252   -125.28252 
+    9500 3.3261918e-09   -27095.287   -125.28302   -125.28302 
+   10000 3.3261918e-09   -27095.287   -125.28278   -125.28278 
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Loop time of 69.3303 on 12 procs for 10000 steps with 7236 atoms
+
+1197.7% CPU use with 1 MPI tasks x 12 OpenMP threads
+
+Minimization stats:
+  Stopping criterion = max force evaluations
+  Energy initial, next-to-last, final = 
+     -27095.2781762277  -27095.2867641474  -27095.2867641475
+  Force two-norm initial, final = 0.0067535671 0.00020122009
+  Force max component initial, final = 0.0011261279 1.2383476e-05
+  Final line search alpha, max atom move = 1.0000000 1.2383476e-05
+  Iterations, force evaluations = 10000 20000
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 62.631     | 62.631     | 62.631     |   0.0 | 90.34
+Bond    | 1.9864     | 1.9864     | 1.9864     |   0.0 |  2.87
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 1.3566     | 1.3566     | 1.3566     |   0.0 |  1.96
+Output  | 0.0043924  | 0.0043924  | 0.0043924  |   0.0 |  0.01
+Modify  | 0.7714     | 0.7714     | 0.7714     |   0.0 |  1.11
+Other   |            | 2.58       |            |       |  3.72
+
+Nlocal:        7236.00 ave        7236 max        7236 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:        14066.0 ave       14066 max       14066 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1.05763e+06 ave 1.05763e+06 max 1.05763e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1057632
+Ave neighs/atom = 146.16252
+Ave special neighs/atom = 2.0359315
+Neighbor list builds = 0
+Dangerous builds = 0
+
+reset_timestep 0
+timestep ${fire_timesize}
+timestep 50
+velocity all zero linear
+min_style fire/old
+minimize 0.0 0.0 ${fire_step} ${fire_step}
+minimize 0.0 0.0 1000 ${fire_step}
+minimize 0.0 0.0 1000 1000
+WARNING: Using 'neigh_modify every 1 delay 0 check yes' setting during minimization (../min.cpp:187)
+Hybrid pair style last /omp style lj/gromacs/coul/gromacs
+Last active /omp style is improper_style harmonic/omp
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Per MPI rank memory allocation (min/avg/max) = 41.78 | 41.78 | 41.78 Mbytes
+Step Temp TotEng v_m1m2E c_m1m2E 
+       0            0   -27095.287   -125.28278   -125.28278 
+     500 3.1579429e-13   -27095.287   -125.28277   -125.28277 
+    1000 4.1345714e-12   -27095.287   -125.28277   -125.28277 
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Loop time of 3.47308 on 12 procs for 1000 steps with 7236 atoms
+
+1197.8% CPU use with 1 MPI tasks x 12 OpenMP threads
+
+Minimization stats:
+  Stopping criterion = max iterations
+  Energy initial, next-to-last, final = 
+     -27095.2867641475  -27095.2867641511  -27095.2867641511
+  Force two-norm initial, final = 0.00020122009 0.00016475349
+  Force max component initial, final = 1.2383476e-05 7.0282132e-05
+  Final line search alpha, max atom move = 0.0000000 0.0000000
+  Iterations, force evaluations = 1000 1000
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 3.1304     | 3.1304     | 3.1304     |   0.0 | 90.13
+Bond    | 0.099621   | 0.099621   | 0.099621   |   0.0 |  2.87
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0.067036   | 0.067036   | 0.067036   |   0.0 |  1.93
+Output  | 0.00044509 | 0.00044509 | 0.00044509 |   0.0 |  0.01
+Modify  | 0.038715   | 0.038715   | 0.038715   |   0.0 |  1.11
+Other   |            | 0.1368     |            |       |  3.94
+
+Nlocal:        7236.00 ave        7236 max        7236 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:        14064.0 ave       14064 max       14064 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1.05763e+06 ave 1.05763e+06 max 1.05763e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1057627
+Ave neighs/atom = 146.16183
+Ave special neighs/atom = 2.0359315
+Neighbor list builds = 0
+Dangerous builds = 0
+
+#back to regular timestep size
+timestep ${timesize}
+timestep 10
+
+#unfix 123
+
+#velocity all zero linear
+
+#min_style quickmin
+#minimize 0.0 ${forcecon} ${opt_step} ${opt_step}
+#velocity all zero linear
+########################################### the end of test
+    include MD.in
+velocity all create ${Ann_T} ${seed} mom yes rot yes dist gaussian
+velocity all create 400 ${seed} mom yes rot yes dist gaussian
+velocity all create 400 53161 mom yes rot yes dist gaussian
+velocity all scale ${Ann_T}
+velocity all scale 400
+fix 123 ${material_2} spring/self 10.0
+fix 123 Cancer_Cell spring/self 10.0
+fix_modify 123 energy yes
+
+##watch out for shake bond types
+fix 4 all shake 0.0001 20 0 b 94 95
+       0 = # of size 2 clusters
+    2300 = # of size 3 clusters
+       0 = # of size 4 clusters
+       0 = # of frozen angles
+  find clusters CPU = 0.002 seconds
+fix 2 all nvt temp ${Ann_T} 300 ${Tdamp}
+fix 2 all nvt temp 400 300 ${Tdamp}
+fix 2 all nvt temp 400 300 1000
+thermo_style custom step temp etotal v_m1m2E c_m1m2E
+thermo 500
+run	  ${MD_step}
+run	  5000
+Hybrid pair style last /omp style lj/gromacs/coul/gromacs
+Last active /omp style is improper_style harmonic/omp
+WARNING: Bond/angle/dihedral extent > half of periodic box length (../domain.cpp:935)
+Per MPI rank memory allocation (min/avg/max) = 47.28 | 47.28 | 47.28 Mbytes
+Step Temp TotEng v_m1m2E c_m1m2E 
+    1000    507.57089   -18809.391   -125.28277   -125.28277 
+    1500    261.89842   -15862.193   -115.10764   -115.10764 
+    2000    387.72582   -10829.726   -114.59783   -114.59783 
+    2500    364.65727   -11536.489   -115.43169   -115.43169 
+    3000     359.2535   -11722.344   -123.16322   -123.16322 
+    3500    349.89708   -11942.962     -112.818     -112.818 
+    4000    346.57314   -12275.588    -109.8165    -109.8165 
+    4500    331.24284   -12676.267   -116.71521   -116.71521 
+    5000    328.28174   -13039.168   -122.81416   -122.81416 
+    5500    310.67789    -13440.22   -119.45661   -119.45661 
+    6000    293.92343   -13938.509   -117.80804   -117.80804 
+Loop time of 45.6609 on 12 procs for 5000 steps with 7236 atoms
+
+Performance: 94.611 ns/day, 0.254 hours/ns, 109.503 timesteps/s
+1196.8% CPU use with 1 MPI tasks x 12 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 8.436      | 8.436      | 8.436      |   0.0 | 18.48
+Bond    | 1.0867     | 1.0867     | 1.0867     |   0.0 |  2.38
+Neigh   | 1.8388     | 1.8388     | 1.8388     |   0.0 |  4.03
+Comm    | 8.0556     | 8.0556     | 8.0556     |   0.0 | 17.64
+Output  | 0.0021876  | 0.0021876  | 0.0021876  |   0.0 |  0.00
+Modify  | 23.803     | 23.803     | 23.803     |   0.0 | 52.13
+Other   |            | 2.439      |            |       |  5.34
+
+Nlocal:        7236.00 ave        7236 max        7236 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:        13923.0 ave       13923 max       13923 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1.03392e+06 ave 1.03392e+06 max 1.03392e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1033922
+Ave neighs/atom = 142.88585
+Ave special neighs/atom = 2.0359315
+Neighbor list builds = 499
+Dangerous builds = 497
+unfix 2
+unfix 123
+unfix 4
+    include system_opt.in
+#!!!!!fix 1 all box/relax iso 0. # if PBC is true, you should use this command.
+
+# The following is only for testing which optimzation method works for your current potential function.
+# You should do the test when you conduct this script first time. Then check the log file to keep the workable methods.
+############################################# Test begions
+
+#fix 123 ${material_2} spring/self 10.0
+#fix_modify 123 energy yes
+reset_timestep 0
+thermo 500
+thermo_style custom step temp etotal v_m1m2E c_m1m2E
+
+#min_style sd
+#minimize 0.0 ${forcecon} ${opt_step} ${opt_step}
+
+#min_style hftn
+#minimize 0.0 ${forcecon} ${opt_step} ${opt_step}
+
+#timestep ${timesize}
+min_style cg
+##minimize 0.0 1e-6 ${opt_step1} ${opt_step2} #1w~10w
+minimize 0.0 0.0 ${opt_step1} ${opt_step2} #1w~10w
+minimize 0.0 0.0 20000 ${opt_step2} 
+minimize 0.0 0.0 20000 20000 
+WARNING: Using 'neigh_modify every 1 delay 0 check yes' setting during minimization (../min.cpp:187)
+Hybrid pair style last /omp style lj/gromacs/coul/gromacs
+Last active /omp style is improper_style harmonic/omp
+Per MPI rank memory allocation (min/avg/max) = 44.03 | 44.03 | 44.03 Mbytes
+Step Temp TotEng v_m1m2E c_m1m2E 
+       0    231.63144   -14062.759   -117.80804   -117.80804 
+     500    231.63144   -21378.545   -125.77921   -125.77921 
+    1000    231.63144   -21701.284   -120.99146   -120.99146 
+    1500    231.63144   -21911.841   -124.22657   -124.22657 
+    2000    231.63144   -22024.896   -124.61426   -124.61426 
+    2500    231.63144   -22108.164   -122.39267   -122.39267 
+    3000    231.63144   -22173.207   -122.17573   -122.17573 
+    3500    231.63144   -22219.571   -123.62675   -123.62675 
+    4000    231.63144   -22260.048    -124.6108    -124.6108 
+    4500    231.63144   -22278.288   -124.83988   -124.83988 
+    5000    231.63144   -22298.022   -125.41931   -125.41931 
+    5500    231.63144    -22310.65   -125.33372   -125.33372 
+    6000    231.63144    -22328.27   -124.77326   -124.77326 
+    6500    231.63144   -22342.778   -125.27385   -125.27385 
+    7000    231.63144   -22360.179   -124.63931   -124.63931 
+    7500    231.63144   -22368.253   -123.51994   -123.51994 
+    8000    231.63144   -22379.737   -121.78107   -121.78107 
+    8500    231.63144    -22388.51    -122.2592    -122.2592 
+    9000    231.63144   -22389.196    -121.9171    -121.9171 
+    9500    231.63144   -22389.447   -121.98684   -121.98684 
+   10000    231.63144   -22389.482    -122.0082    -122.0082 
+   10009    231.63144   -22389.482      -122.01      -122.01 
+Loop time of 71.235 on 12 procs for 10009 steps with 7236 atoms
+
+1197.7% CPU use with 1 MPI tasks x 12 OpenMP threads
+
+Minimization stats:
+  Stopping criterion = max force evaluations
+  Energy initial, next-to-last, final = 
+     -19058.1598250954  -27384.8826958276  -27384.8827150718
+  Force two-norm initial, final = 479.94381 0.12253603
+  Force max component initial, final = 30.842067 0.031862002
+  Final line search alpha, max atom move = 0.95219972 0.030338990
+  Iterations, force evaluations = 10009 20001
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 63.63      | 63.63      | 63.63      |   0.0 | 89.32
+Bond    | 2.0094     | 2.0094     | 2.0094     |   0.0 |  2.82
+Neigh   | 0.9211     | 0.9211     | 0.9211     |   0.0 |  1.29
+Comm    | 1.3836     | 1.3836     | 1.3836     |   0.0 |  1.94
+Output  | 0.0046822  | 0.0046822  | 0.0046822  |   0.0 |  0.01
+Modify  | 0.75888    | 0.75888    | 0.75888    |   0.0 |  1.07
+Other   |            | 2.527      |            |       |  3.55
+
+Nlocal:        7236.00 ave        7236 max        7236 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:        13008.0 ave       13008 max       13008 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1.08960e+06 ave  1.0896e+06 max  1.0896e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1089600
+Ave neighs/atom = 150.58043
+Ave special neighs/atom = 2.0359315
+Neighbor list builds = 230
+Dangerous builds = 0
+
+reset_timestep 0
+timestep ${fire_timesize}
+timestep 50
+velocity all zero linear
+min_style fire/old
+minimize 0.0 0.0 ${fire_step} ${fire_step}
+minimize 0.0 0.0 1000 ${fire_step}
+minimize 0.0 0.0 1000 1000
+WARNING: Using 'neigh_modify every 1 delay 0 check yes' setting during minimization (../min.cpp:187)
+Hybrid pair style last /omp style lj/gromacs/coul/gromacs
+Last active /omp style is improper_style harmonic/omp
+Per MPI rank memory allocation (min/avg/max) = 43.30 | 43.30 | 43.30 Mbytes
+Step Temp TotEng v_m1m2E c_m1m2E 
+       0            0   -27384.883      -122.01      -122.01 
+     500 4.469591e-07   -27384.884   -122.01095   -122.01095 
+    1000 7.7699802e-07   -27384.884   -122.01175   -122.01175 
+Loop time of 3.53999 on 12 procs for 1000 steps with 7236 atoms
+
+1197.9% CPU use with 1 MPI tasks x 12 OpenMP threads
+
+Minimization stats:
+  Stopping criterion = max iterations
+  Energy initial, next-to-last, final = 
+     -27384.8827150718  -27384.8844199265  -27384.8844234768
+  Force two-norm initial, final = 0.12253603 0.038237305
+  Force max component initial, final = 0.031862002 0.014873016
+  Final line search alpha, max atom move = 0.0000000 0.0000000
+  Iterations, force evaluations = 1000 1000
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 3.2044     | 3.2044     | 3.2044     |   0.0 | 90.52
+Bond    | 0.099003   | 0.099003   | 0.099003   |   0.0 |  2.80
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0.062352   | 0.062352   | 0.062352   |   0.0 |  1.76
+Output  | 0.00045573 | 0.00045573 | 0.00045573 |   0.0 |  0.01
+Modify  | 0.037237   | 0.037237   | 0.037237   |   0.0 |  1.05
+Other   |            | 0.1365     |            |       |  3.86
+
+Nlocal:        7236.00 ave        7236 max        7236 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:        13003.0 ave       13003 max       13003 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1.08954e+06 ave 1.08954e+06 max 1.08954e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1089545
+Ave neighs/atom = 150.57283
+Ave special neighs/atom = 2.0359315
+Neighbor list builds = 0
+Dangerous builds = 0
+
+#back to regular timestep size
+timestep ${timesize}
+timestep 10
+
+#unfix 123
+
+#velocity all zero linear
+
+#min_style quickmin
+#minimize 0.0 ${forcecon} ${opt_step} ${opt_step}
+#velocity all zero linear
+########################################### the end of test
+
+    #shell cd ${FoldName}
+    #write_data bh_${BH_No}.data nocoeff
+    #shell cd ..
+    run 0 #for getting current state after you use write_data
+Hybrid pair style last /omp style lj/gromacs/coul/gromacs
+Last active /omp style is improper_style harmonic/omp
+Per MPI rank memory allocation (min/avg/max) = 46.30 | 46.30 | 46.30 Mbytes
+Step Temp TotEng v_m1m2E c_m1m2E 
+    1000 7.7699802e-07   -27384.884   -122.01175   -122.01175 
+Loop time of 9.55e-07 on 12 procs for 0 steps with 7236 atoms
+
+209.4% CPU use with 1 MPI tasks x 12 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 0          | 0          | 0          |   0.0 |  0.00
+Bond    | 0          | 0          | 0          |   0.0 |  0.00
+Neigh   | 0          | 0          | 0          |   0.0 |  0.00
+Comm    | 0          | 0          | 0          |   0.0 |  0.00
+Output  | 0          | 0          | 0          |   0.0 |  0.00
+Modify  | 0          | 0          | 0          |   0.0 |  0.00
+Other   |            | 9.55e-07   |            |       |100.00
+
+Nlocal:        7236.00 ave        7236 max        7236 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:        13003.0 ave       13003 max       13003 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    1.08956e+06 ave 1.08956e+06 max 1.08956e+06 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 1089556
+Ave neighs/atom = 150.57435
+Ave special neighs/atom = 2.0359315
+Neighbor list builds = 0
+Dangerous builds = 0
+    print "****BH_No: ${BH_No}"
+****BH_No: 1
+    print "Enmin_G: ${Enmin_G} "
+Enmin_G: -125.196804947882 
+	print "eST_G: ${eST_G} "
+eST_G: 1.87539538055019 
+	print "current group/group: ${m1m2E}"
+current group/group: -122.011753202944
+	print "******"
+******
+print "MC_keep.in at ****BH_No: ${BH_No}"
+MC_keep.in at ****BH_No: 1
+
+    include MC_keep.in
+#### keep the better result
+variable currenteST_G equal ${eST_G}
+variable currenteST_G equal 1.87539538055019
+print "***MC_keep 1"
+***MC_keep 1
+shell cd ${FoldName}
+shell cd STUN_BH_out
+
+if " (${currenteST_G} <= 0.0)" then    "variable Enmin_G equal ${m1m2E} "    "variable nbetter equal ${incrbetter}"    "write_data better_${nbetter}.data nocoeff"    "thermo_style custom step v_m1m2E c_m1m2E"    "dump 12 all custom 1 best.xyz id mol type q x y z ix iy iz"    "run 0"    "undump 12" 	"print '${nbetter} M1M2Energy: ${m1m2E} at ${BH_No} BH iterations' append 00SABH_record.dat screen no"    "print '****eST_G: ${currenteST_G} -> Find better configuration at ${BH_No}-th BH loop!!!!****' "
+
+shell cd ..
+print "***MC_keep 2"
+***MC_keep 2
+###STUN Boltzmann factor
+#thermo_style custom step v_m1m2E c_m1m2E1
+#run 0 # if you use "write_data" before
+print "Last kept STUN_G : ${STUN_last_G}"
+Last kept STUN_G : 0
+print "current eST_G : ${currenteST_G} kT: ${kT}"
+current eST_G : 1.87539538055019 kT: 1
+print "BH_No: ${BH_No}"
+BH_No: 1
+
+#m1m2 energy boltzfactor
+variable boltzfactor_G equal exp((${STUN_last_G}-${currenteST_G})/${kT})
+variable boltzfactor_G equal exp((0-${currenteST_G})/${kT})
+variable boltzfactor_G equal exp((0-1.87539538055019)/${kT})
+variable boltzfactor_G equal exp((0-1.87539538055019)/1)
+print "boltzfactor_G: ${boltzfactor_G}"
+boltzfactor_G: 0.153294345258851
+
+variable temp equal ${MC_rn} #0~1
+variable temp equal 0.26789528131485 
+print "MC_rn: ${temp}"
+MC_rn: 0.26789528131485
+
+############### currenteST_G
+shell cd ${FoldName}
+shell cd STUN_BH_out
+if " ${currenteST_G} <= ${STUN_last_G} " then    "print '****last eST_G,${STUN_last_G} >= currenteST_G, ${currenteST_G} at ${BH_No}-th loop!!!!****' "    "variable STUN_last_G equal ${currenteST_G}"    "variable naccept_G equal ${increment_G}"    "reset_timestep 0" 	"dump 11 all custom 1 MC.xyz id mol type q x y z ix iy iz"    "run 0" 	"undump 11" elif " ${temp} <= ${boltzfactor_G} "    "variable STUN_last_G equal ${currenteST_G}"    "variable naccept_G equal ${increment_G}"    "reset_timestep 0"    "print '*******Boltzmann factor works at ${BH_No}-th loop ****' " 	"dump 11 all custom 1 MC.xyz id mol type q x y z ix iy iz"    "run 0" 	"undump 11" else 	"read_dump MC.xyz 0 q x y z ix iy iz box yes replace yes add yes"
+read_dump MC.xyz 0 q x y z ix iy iz box yes replace yes add yes
+Scanning dump file ...
+ERROR: Dump file does not contain requested snapshot (../read_dump.cpp:119)
+Last command: read_dump MC.xyz 0 q x y z ix iy iz box yes replace yes add yes

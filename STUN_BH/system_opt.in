@@ -1,0 +1,40 @@
+#!!!!!fix 1 all box/relax iso 0. # if PBC is true, you should use this command.
+
+# The following is only for testing which optimzation method works for your current potential function.
+# You should do the test when you conduct this script first time. Then check the log file to keep the workable methods.
+############################################# Test begions
+
+#fix 123 ${material_2} spring/self 10.0
+#fix_modify 123 energy yes
+reset_timestep 0
+thermo 500
+thermo_style custom step temp etotal v_m1m2E c_m1m2E
+
+#min_style sd
+#minimize 0.0 ${forcecon} ${opt_step} ${opt_step}
+
+#min_style hftn
+#minimize 0.0 ${forcecon} ${opt_step} ${opt_step}
+
+#timestep ${timesize}
+min_style cg
+##minimize 0.0 1e-6 ${opt_step1} ${opt_step2} #1w~10w
+minimize 0.0 0.0 ${opt_step1} ${opt_step2} #1w~10w
+
+reset_timestep 0
+timestep ${fire_timesize}
+velocity all zero linear
+min_style fire/old
+minimize 0.0 0.0 ${fire_step} ${fire_step}
+
+#back to regular timestep size
+timestep ${timesize}
+
+#unfix 123
+
+#velocity all zero linear
+
+#min_style quickmin
+#minimize 0.0 ${forcecon} ${opt_step} ${opt_step}
+#velocity all zero linear
+########################################### the end of test

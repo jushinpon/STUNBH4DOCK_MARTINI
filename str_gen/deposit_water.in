@@ -1,0 +1,92 @@
+variable jumpname 	index deposit_water.in 	
+run_style respa 4 2 2 2  bond 1 angle 2 dihedral 3 pair 4 #設定timestep分割的大小，增加計算效率
+timestep 		10.0
+group all_mol molecule 1 2 3 4
+fix 123 all_mol spring/self 10.0
+#####Variable###########################################################################
+variable ssDNA 		equal count(all) 				#ssDNA atom + Protein atom
+variable TotalSUM    equal ${ssDNA}
+variable Totalcharge 	equal charge(all) 
+variable abscharge 	   equal abs(${Totalcharge})
+print ${abscharge} 
+variable radius	  		equal 4					#atoms Range
+variable DNA_Pro  		loop  ${TotalSUM} 				#every atoms group atom
+variable boundary 		equal 10						#water boundary
+variable Den 	  		equal 1 						#density
+variable W 				equal 15
+variable WP				equal 16
+variable WM				equal 17
+variable Na_P 			equal 19                      # ID of Qd
+variable Cl_M 			equal 18                      # ID of Qa
+#####取得BOX邊界 修正BOX邊界############################################################
+variable xmax equal bound(all,xmax)+15 ##the highest layer of upper substrate
+variable xmin equal bound(all,xmin)-15
+variable ymax equal bound(all,ymax)+15 ##the highest layer of upper substrate
+variable ymin equal bound(all,ymin)-15
+variable zmax equal bound(all,zmax)+15 ##the highest layer of upper substrate
+variable zmin equal bound(all,zmin)-15
+change_box all x final ${xmin} ${xmax} y final ${ymin} ${ymax} z final ${zmin} ${zmax}
+#####修正BOX邊界########################################################################
+variable xmax_m equal ${xmax}#+${boundary}
+variable xmin_m equal ${xmin}#-${boundary}
+variable ymax_m equal ${ymax}#+${boundary}
+variable ymin_m equal ${ymin}#-${boundary}
+variable zmax_m equal ${zmax}#+${boundary}
+variable zmin_m equal ${zmin}#-${boundary}
+#####創立修正後的BOX大小，並作為deposit的空間###########################################
+region wholebox block ${xmin_m} ${xmax_m} ${ymin_m} ${ymax_m} ${zmin_m} ${zmax_m} 
+region forbiden block ${xmin} ${xmax} ${ymin} ${ymax} ${zmin} ${zmax} side out
+region deposit block ${xmin_m} ${xmax_m} ${ymin_m} ${ymax_m} ${zmin_m} ${zmax_m} 
+change_box all x final ${xmin_m} ${xmax_m} y final ${ymin_m} ${ymax_m} z final ${zmin_m} ${zmax_m}
+#####設計Complex周圍為一個虛擬區域，避免水放入Complex中##################################
+variable num string ""
+label forbiden
+variable x equal x[${DNA_Pro}]
+variable y equal y[${DNA_Pro}]
+variable z equal z[${DNA_Pro}]
+   region ${DNA_Pro}_${Big_BH_No} sphere ${x} ${y} ${z} ${radius} side out
+   variable num string '${num} ${DNA_Pro}_${Big_BH_No}' 
+next DNA_Pro                 
+jump ${jumpname} forbiden
+region complex intersect ${TotalSUM} ${num}
+region out_complex intersect 2 wholebox complex ####虛擬區域
+#####Deposit ions#########################################################################
+#if 	"${Totalcharge} > 0 " then &
+#	" create_atoms 	${Na_P} random ${abscharge} ${seed} out_complex " &
+#else " create_atoms 	${Cl_M} random ${abscharge} ${seed} out_complex "
+create_atoms 	${Cl_M} random 15 ${seed} out_complex
+set type 		${Na_P} charge 1 
+set type 		${Cl_M} charge -1 
+set type 		${Na_P} mol ${Na_P}
+set type        ${Cl_M} mol ${Cl_M} 
+#fix 			2 all deposit 20 ${Na_P} 1 ${seed} region out_complex near 5.0 attempt 1
+thermo_style 	custom step evdwl density pe
+thermo 100
+#run 			10
+#unfix 			2
+#write_data DepositION.data
+#####water mol file ######################################################################
+molecule water_w_${Big_BH_No} water.mol
+label loopaa
+reset_timestep 0
+fix 2 all deposit 1000 0 1 ${seed} region out_complex mol water_w_${Big_BH_No} near 2.5 attempt 100
+run 100
+unfix 2 
+if "$(density) >= 1.0" then "jump SELF break"
+jump SELF loopaa
+label break
+
+set type        ${W} mol ${W}
+set type        ${WM} mol ${W}
+set type        ${WP} mol ${W}
+######Deposit_water########################################################################
+print 			"Final system Density: $(density)"  
+write_data 		Deposit_again.data nocoeff
+###########################################################################################
+region wholebox delete
+region forbiden delete
+region deposit delete
+region complex delete
+region out_complex delete
+variable num delete
+print "*******Deposit_again ALL DONE****"

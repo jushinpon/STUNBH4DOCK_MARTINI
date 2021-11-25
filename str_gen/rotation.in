@@ -1,0 +1,64 @@
+variable Tatom1 equal 260 #***first terminal atom from OVITO
+variable Tatom2 equal 317 #***last terminal atom from OVITO
+variable Centeratom equal 280 #*** terminal atom from OVITO
+variable xmax equal bound(all,xmax) ##the highest layer of upper substrate
+variable xmin equal bound(all,xmin)
+variable ymax equal bound(all,ymax) ##the highest layer of upper substrate
+variable ymin equal bound(all,ymin)
+variable zmax equal bound(all,zmax) ##the highest layer of upper substrate
+variable zmin equal bound(all,zmin)
+variable xeq equal (${xmax}+${xmin})/2
+variable yeq equal (${ymax}+${ymin})/2
+variable zeq equal (${zmax}+${zmin})/2
+variable c1 equal ${xeq}-x[${Centeratom}]
+variable c2 equal ${yeq}-y[${Centeratom}]
+variable c3 equal ${zeq}-z[${Centeratom}]
+displace_atoms all move ${c1} ${c2} ${c3}
+
+write_data 063displace_atoms.data nocoeff
+
+variable a1 equal x[${Tatom1}]-x[${Tatom2}]
+variable a2 equal y[${Tatom1}]-y[${Tatom2}]
+variable a3 equal z[${Tatom1}]-z[${Tatom2}]
+
+variable dist_2T equal sqrt(v_a1*v_a1+v_a2*v_a2+v_a3*v_a3) # distance between two terminal atoms
+
+#set the following reference direction which we would like to align our chain by displace_atoms rotate
+variable refx equal 0
+variable refy equal 0
+variable refz equal 1
+
+variable Tatom2x equal x[${Tatom2}] ## rotate the chain by this origin (Tatom2)
+variable Tatom2y equal y[${Tatom2}]
+variable Tatom2z equal z[${Tatom2}]
+
+variable unita1 equal ${a1}/${dist_2T} # unit x vector from Tatom2 to Tatom1  
+variable unita2 equal ${a2}/${dist_2T} # unit y vector from Tatom2 to Tatom1
+variable unita3 equal ${a3}/${dist_2T} # unit z vector from Tatom2 to Tatom1
+
+variable crossproduct equal ${refx}*${unita1}+${refy}*${unita2}+${refz}*${unita3} # cross product for reference direction and chain axial direction
+variable theta_rad equal acos(${crossproduct}) # get the angle by acos function (radial unit)
+variable rad2deg equal 180./acos(-1) #get the constant for rad2deg (acos(-1) equals to pi)
+variable theta_rad equal acos(${crossproduct})
+variable theta_deg equal -${theta_rad}*${rad2deg} # convert rad to degree which lammps rotate uses for angle unit.
+
+## outer product, You have to use the chain vetor multiply the reference vector for chain rotation
+variable outerx equal ${refy}*${unita3}-${refz}*${unita2}
+variable outery equal ${refz}*${unita1}-${refx}*${unita3}
+variable outerz equal ${refx}*${unita2}-${refy}*${unita1}
+
+displace_atoms all rotate ${Tatom2x} ${Tatom2y} ${Tatom2z} ${outerx} ${outery} ${outerz} ${theta_deg} 
+
+write_data 065Rotation.data nocoeff
+
+variable Centeratom equal 280 #*** terminal atom from OVITO
+variable c1 equal ${xeq}-x[${Centeratom}]#+20
+variable c2 equal ${yeq}-y[${Centeratom}]#-35
+variable c3 equal ${zeq}-z[${Centeratom}]
+displace_atoms all move ${c1} ${c2} ${c3}
+
+thermo_style custom step etotal pe v_PotEng_all v_GGE_ssDNA c_center1[1] c_center1[2] c_center1[3] c_center2[1] c_center2[2] c_center2[3] c_1 c_2 
+run 0  
+displace_atoms ${material_2} rotate ${xcom2} ${ycom2} ${zcom2} 1 0 0 90 units box
+
+write_data 067displace_atoms.data nocoeff

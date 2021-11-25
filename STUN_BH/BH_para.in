@@ -1,0 +1,45 @@
+#var = cluster change
+variable rand equal random(1,100000,23456)
+variable seed equal round(v_rand) #modify this 
+variable  MC_rn equal random(0.0,1.0,${seed}) ## random number for MC evaluation
+variable rand_Dr equal random(-1,1,${seed}) ## prefact value for random atomic movement
+variable rand_Dr_axial equal random(0,0.5,${seed}) ## for axial move of NW
+variable seed1 equal ceil(v_MC_rn*${seed})
+#variable  MC_rn1 equal random(-1.0,1.0,${seed}1)
+variable bhloop equal 1000 #BH loop number
+variable opt_step1 equal 20000 #system_opt.in
+variable opt_step2 equal 20000 #system_opt.in
+variable adjust_increment equal 0.5/${bhloop}
+variable BB_ratio equal -0.1
+variable BB_length equal 1 # for constructing BB box cell lengths
+variable BB_length_basis equal 1
+variable opt_No1 equal 1
+variable changebox equal 0.2
+variable ubound equal 25 ###get this from OVITO ##########>??????????
+variable lbound equal 0  ###get this from OVITO
+
+variable Rangle_Big equal random(-180.0,180.0,${seed})
+variable Rangle1 equal random(-2.5,2.5,${seed})
+variable Rangle2 equal random(-2.5,2.5,${seed})
+variable timesize equal 10					#timestep=10	
+variable fire_timesize equal ${timesize}*5					
+variable fire_step equal 1000					
+variable Tdamp equal ${timesize}*100
+variable Pdamp equal ${timesize}*1000
+variable Ann_T equal 400 # the starting temperature for annealing
+variable MD_step equal 5000 # step for MD
+variable DMDAnn_T equal 350 # the starting temperature for annealing
+variable DMD_step equal 5000 # step for MD
+
+variable Eq_step equal 30000 # step for equilibrium
+
+#STUN Boltzmann factor setting
+variable kT equal 1 #0.000625         # initial kT in Boltzmann factor 
+variable kT_inc equal 2 # multiple factor of KT for increasing KT
+variable kT_dec equal 0.5 # multiple factor of KT for decreasing KT
+variable kT_adj equal 20 # KT adjusting frequency (How many loops to invoke KT adjusting_
+variable desired_ratio equal 0.8
+variable desired_upper equal 0.6
+variable desired_lower equal 0.3
+variable iniT equal 600
+variable Tincr equal (${iniT}-300)/(${bhloop}-1)

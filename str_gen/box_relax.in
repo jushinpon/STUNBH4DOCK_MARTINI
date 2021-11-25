@@ -1,0 +1,117 @@
+variable  	file1 		index 	box_relax_fire_${Big_BH_No}
+variable 	jumpname1 	index 	box_relax.in 
+run_style respa 4 2 2 2  bond 1 angle 2 dihedral 3 pair 4 #設定timestep分割的大小，增加計算效率 
+timestep 		${timesize}
+thermo_style 	custom step temp pe etotal press vol density
+thermo 			1000
+print "**************box/relax start***************"
+group all_mol molecule 1 2 3 4
+fix 123 		all_mol spring/self 10.0
+minimize 0 0 20000 20000
+unfix 123
+#shell mkdir 	${file1} 		#創資料夾
+
+velocity all 	create 300 12345 mom yes rot yes dist gaussian   # 溫度在300k時 隨機產生一個速度   線性動量跟角動量為0
+velocity all 	scale 300 #溫度為300
+###################################NPT_1####################################################
+thermo 			1000
+reset_timestep 	0
+fix 123 		all_mol spring/self 10.0
+fix_modify 	123 energy yes
+fix				3 all shake 0.0001 20 0 b 94 95
+fix 			1 all 	npt temp 300.0 300.0 100.0 iso 10.0 10.0 1000.0
+#dump 			2 all 	custom 1000 npt_1_*.cfg id type x y z xu yu zu mol
+run  			20000
+unfix 			1
+#undump 			2
+unfix			3
+unfix 			123
+###################################NPT_2####################################################
+#shell cd 		${file1} 		#移資料夾
+
+reset_timestep 	0
+fix 123 		all_mol spring/self 10.0
+fix_modify 	123 energy yes
+fix				3 all shake 0.0001 20 0 b 94 95
+fix 			1 all 	npt temp 300.0 300.0 100.0 iso 0.0 0.0 1000.0
+#dump 			2 all 	custom 1000 npt_2_*.cfg id type x y z xu yu zu mol
+run  			20000
+unfix 			1
+#undump 			2
+unfix 			3
+unfix 			123
+#write_data 		NPT_0atm.data nocoeff
+#shell cd ..
+###################################boxrelax#################################################
+reset_timestep 	0
+timestep 		10.0
+variable	j 			loop 	20 
+label 		NS_data2     		## DATA loop	
+#	shell cd 		${file1} 		#移資料夾
+	fix 		123 all_mol spring/self 10.0
+	fix_modify 	123 energy yes
+	min_style 		cg 			#共軛梯度法
+#	dump 			8 all 	custom 1000 minimize_0_*.cfg id type x y z xu yu zu mol
+	fix 			1 all 	box/relax iso 0.0
+	minimize 		1.0e-15 1.0e-18 5000 5000
+	unfix 			1
+#	undump 			8
+	min_style 		cg
+	minimize 		1.0e-15 1.0e-18 1000 1000
+	unfix 		123	 
+#	shell cd ..
+next		j
+jump 		${jumpname1} NS_data2
+
+###################################minimize#################################################
+reset_timestep 	0 
+#shell cd 		${file1} 		#移資料夾
+fix 		123 all_mol spring/self 10.0
+fix_modify 	123 energy yes
+min_style 		cg 			#共軛梯度法
+#dump 			8 all 	custom 1000 minimize_1_*.cfg id type x y z xu yu zu mol
+minimize 		1.0e-15 1.0e-18 50000 100000
+#undump 			8
+min_style 		cg
+minimize 		1.0e-15 1.0e-18 1000 1000		
+unfix 		123
+#write_data 		MIN.data nocoeff
+#shell cd ..
+###################################DONE#####################################################	
+#write_data 		after_boxrelax.data nocoeff
+print "*******box/relax DONE ****"
+
+#shell mkdir 	nvt_${Big_BH_No} 		#創資料夾
+#shell cd 		nvt_${Big_BH_No}			#移資料夾
+###################################Velocity#################################################
+velocity all 	create 300 12345 mom yes rot yes dist gaussian   # 溫度在300k時 隨機產生一個速度   線性動量跟角動量為0
+velocity all 	scale 300 #溫度為300
+thermo_style 	custom step temp pe etotal press vol density
+fix 		123 all_mol spring/self 10.0
+fix_modify 	123 energy yes
+###################################NPT######################################################
+run				0
+write_data 		datanvt_0.data nocoeff
+reset_timestep 	0
+thermo 			1000	
+fix				2 all shake 0.0001 20 0 b 94 95
+fix 			1 all npt temp 300.0 300.0 100.0 iso 0.0 0.0 100.0
+run 			15000 #every 10000 "write_data datanvt_*.data nocoeff"
+unfix 			2
+unfix 			1
+write_data 		after_NVT.data nocoeff
+###################################NVT######################################################
+run				0
+write_data 		datanvt_0.data nocoeff
+reset_timestep 	0
+thermo 			1000	
+fix				2 all shake 0.0001 20 0 b 94 95
+fix 			1 all nvt temp 300.0 300.0 1000.0
+run 			15000 #every 10000 "write_data datanvt_*.data nocoeff"
+unfix 			2
+unfix 			1
+#write_data 		after_NVT.data nocoeff
+#shell cd 		..
+##################################FINAL######################################################
+unfix 123
+print "*******box/relax ALL DONE****"

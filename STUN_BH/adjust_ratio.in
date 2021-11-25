@@ -1,0 +1,46 @@
+variable redundance equal ${BH_No}%${kT_adj} #small loop 
+
+if " ${redundance} == 0" then &
+"jump adjust_ratio.in adj_1" &
+else &
+"jump adjust_ratio.in adj_end"
+
+label adj_1 # ${redundance} == 0
+
+shell cd ${FoldName}
+print           "                         "           append 00SABH_MCcheck.dat screen no
+print           "BH loop: ${BH_No}" append 00SABH_MCcheck.dat screen no
+print           "Total MC moves = ${kT_adj}"         append 00SABH_MCcheck.dat screen no  
+print           "Accepted MC moves = ${naccept_G}"     append 00SABH_MCcheck.dat screen no
+variable  accepted_ratio_G equal ${naccept_G}/${kT_adj}
+print           "Accepted ratio = ${accepted_ratio_G}"  append 00SABH_MCcheck.dat screen no
+print           "Desired_ratio = ${desired_ratio}"    append 00SABH_MCcheck.dat screen no 
+print           "Desired_upper = ${desired_upper}"  append 00SABH_MCcheck.dat screen no
+print           "Desired_lower = ${desired_lower}"    append 00SABH_MCcheck.dat screen no
+
+if "${accepted_ratio_G} >= ${desired_upper}" then &
+    "print 'accepted_ratio_G >= desired_upper' append 00SABH_MCcheck.dat screen no " &
+    "variable temp_kT equal ${kT}" &
+	"print          'test old_kT = ${temp_kT} kT_dec= ${kT_dec}' " &    
+    "print          'old_kT = ${temp_kT}' append 00SABH_MCcheck.dat screen no" &
+    "variable new_kT equal ${temp_kT}*${kT_dec}" &
+	"print          'new_kT = ${new_kT}' " &
+    "variable kT equal ${new_kT}" &
+	"print '***new kT : ${kT}' " &
+    "print '***new kT : ${kT}' append 00SABH_MCcheck.dat screen no" &
+elif "${accepted_ratio_G} <= ${desired_lower}" &
+    "print 'accepted_ratio_G <= desired_lower' append 00SABH_MCcheck.dat screen no " &
+    "variable temp_kT equal ${kT}" &
+    "print          'old_kT = ${temp_kT}' append 00SABH_MCcheck.dat screen no " &
+    "variable new_kT equal ${temp_kT}*${kT_inc}" &
+    "variable kT equal ${new_kT}" &
+    "print '***new kT : ${kT}' append 00SABH_MCcheck.dat screen no" &
+else &
+"print 'desired_bottom=< accepted_ratio_S <= desired_upper' append 00SABH_MCcheck.dat screen no " &
+"print 'No kT adjustment--> current kT is ${kT}' append 00SABH_MCcheck.dat screen no " 
+
+variable naccept_G equal 0 ## reassign naccept_C for the initial value
+
+shell cd ..
+
+label adj_end

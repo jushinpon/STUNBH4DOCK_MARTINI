@@ -1,0 +1,14 @@
+velocity all create ${Ann_T} ${seed} mom yes rot yes dist gaussian 
+velocity all scale ${Ann_T} 
+fix 123 ${material_2} spring/self 10.0
+fix_modify 123 energy yes
+
+##watch out for shake bond types	
+fix 4 all shake 0.0001 20 0 b 94 95
+fix 2 all nvt temp ${Ann_T} 300 ${Tdamp} 
+thermo_style custom step temp etotal v_m1m2E c_m1m2E
+thermo 500
+run	  ${MD_step}
+unfix 2
+unfix 123
+unfix 4

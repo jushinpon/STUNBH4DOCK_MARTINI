@@ -1,0 +1,54 @@
+#### keep the better result
+variable currenteST_G equal ${eST_G}
+print "***MC_keep 1"
+shell cd ${FoldName}
+
+if " (${currenteST_G} <= 0.0)" then &  
+   "variable Enmin_G equal ${m1m2E} " &
+   "variable nbetter equal ${incrbetter}" &
+   "write_data better_${nbetter}.data nocoeff" &
+   "thermo_style custom step v_m1m2E c_m1m2E" &
+   "dump 12 all custom 1 best.xyz id mol type q x y z ix iy iz" &
+   "run 0" &
+   "undump 12" & 
+	"print '${nbetter} M1M2Energy: ${m1m2E} at ${BH_No} BH iterations' append 00SABH_record.dat screen no" &
+   "print '****eST_G: ${currenteST_G} -> Find better configuration at ${BH_No}-th BH loop!!!!****' " 
+   
+shell cd ..  
+print "***MC_keep 2"
+###STUN Boltzmann factor
+#thermo_style custom step v_m1m2E c_m1m2E1
+#run 0 # if you use "write_data" before
+print "Last kept STUN_G : ${STUN_last_G}"
+print "current eST_G : ${currenteST_G} kT: ${kT}"
+print "BH_No: ${BH_No}"
+
+#m1m2 energy boltzfactor
+variable boltzfactor_G equal exp((${STUN_last_G}-${currenteST_G})/${kT})
+print "boltzfactor_G: ${boltzfactor_G}"
+   
+variable temp equal ${MC_rn} #0~1
+print "MC_rn: ${temp}"
+	
+############### currenteST_G
+shell cd ${FoldName}
+if " ${currenteST_G} <= ${STUN_last_G} " then &
+   "print '****last eST_G,${STUN_last_G} >= currenteST_G, ${currenteST_G} at ${BH_No}-th loop!!!!****' " &     
+   "variable STUN_last_G equal ${currenteST_G}" &
+   "variable naccept_G equal ${increment_G}" &  
+   "reset_timestep 0" &
+	"dump 11 all custom 1 MC.xyz id mol type q x y z ix iy iz" &
+   "run 0" &
+	"undump 11" &
+elif " ${temp} <= ${boltzfactor_G} " &
+   "variable STUN_last_G equal ${currenteST_G}" & 
+   "variable naccept_G equal ${increment_G}" &
+   "reset_timestep 0" &
+   "print '*******Boltzmann factor works at ${BH_No}-th loop ****' " &
+	"dump 11 all custom 1 MC.xyz id mol type q x y z ix iy iz" &
+   "run 0" &
+	"undump 11" &
+else &
+	"read_dump MC.xyz 0 q x y z ix iy iz box yes replace yes add yes"
+	
+shell cd .. 

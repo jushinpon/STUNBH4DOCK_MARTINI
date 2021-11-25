@@ -1,0 +1,178 @@
+# Basin-Hopping +STUN code for finding the NP structure with the global minimal energy by LAMMPS
+# Author: Prof. Shin-Pon Ju at NSYSU (FEB. 20 2017)
+# It should be noted that " Don't try to rename any file of this code. Otherwise the "jump" command may not 
+# find the corresponding label to jump to.
+#The car file output script is in MC_keep.in and you need to modify them as your own atom style for materials studio
+#watch out shake bond type in MD.in
+
+variable FoldName index STUN_BH_out #rm in sbatch file
+
+shell mkdir ${FoldName}
+print "1"
+include BH_para.in # claim required parameters
+print "2"
+variable material_1 index DNA  				#Change     material
+variable material_2 index Cancer_Cell 		#Non-change material
+
+units           real
+atom_style      full
+boundary		p p p
+#box tilt 		large
+special_bonds 	lj/coul 0 1 1		
+dielectric      2.5 					
+neighbor        2.0 bin				#1.2 bin
+neigh_modify    every 5 delay 10 one 5000 check yes
+read_data      After_NVT.data # 00IniBigloop_1.data 		#00IniBigloop_.data 
+include 		all_data_2mole_water.in			#forcefield parameters
+
+fix oldq all store/state 0 q	 # charge is non-zero , store charge for each atom 
+variable q atom f_oldq 				 # q���@��array�A�x�s�Ҧ���l�q������T  
+
+### Set type                  ###################
+### material_1 --> change 	  ###################
+### material_2 --> non_change ###################
+
+###################################  group  ##################################
+group Backbone molecule == 4												##
+group Bases molecule == 3													##
+group ${material_1} molecule 4 3											##
+group ${material_2} molecule 2 1 											##
+group water_ions molecule 	 15 19 18 										##
+group ${material_1}_water_ions molecule 4 3 15 19 18						##
+##############################################################################
+
+#pair_modify 	shift yes #martini not uses shifted potential
+run_style respa 4 2 2 2  bond 1 angle 2 dihedral 3 pair 4 #�]�wtimestep���Ϊ��j�p�A�W�[�p��Ĳv 
+timestep ${timesize} 
+
+#free energy between material_1 and material_2
+compute m1m2E Bases group/group ${material_2} pair yes boundary no 		#�P��MLOOP
+variable m1m2E equal c_m1m2E
+variable globalE_G equal 1e10				# assign a super large initial value to be replaced after the first big BH loop 
+
+reset_timestep 0
+
+## no need to keep this xyz
+#shell cd ${FoldName}
+#	dump 10 all custom 1 ini.xyz id mol type q x y z ix iy iz
+#	run 0
+#	undump 10
+#shell cd ..
+
+#do the initial relaxation before doing STUN_BH loop
+print "doing system_opt.in"
+include system_opt.in
+print "doing equilibrium"
+reset_timestep 0
+velocity all create 300.0 ${seed} mom yes rot yes dist gaussian 
+velocity all scale 300.0
+fix 123 ${material_2} spring/self 10.0
+fix_modify 123 energy yes
+###shake bond
+fix 4 all shake 0.0001 20 0 b 94 95
+fix 1 all nvt temp 300 300 ${Tdamp}
+thermo_style custom step temp etotal c_m1m2E v_m1m2E
+thermo 100
+run		${Eq_step}
+unfix 1
+unfix 123
+unfix 4
+
+write_data After_NVT.data nocoeff 
+
+### initial value setting!!!!!
+#************ DMD ********************
+#print "DMD before STUN_BH"
+#    reset_timestep 0
+#    include all_data_mix100.in
+#    include system_opt.in 
+#    include DMD.in
+  
+#************ MD  *******************
+print "****MD before STUN_BH"
+    reset_timestep 0
+    include all_data_mix.in
+    include system_opt.in 
+    include MD.in
+    include system_opt.in 
+####end of initial value setting
+
+#keep all initial relaxation information
+shell cd ${FoldName}
+print	"Starting group/group energy = ${m1m2E}" append SABH_check.dat screen no  
+#initial structure for MC
+dump 11 all custom 1 MC.xyz id mol type q x y z ix iy iz
+run 0
+undump 11
+
+#initial structure for best
+dump 100 all custom 1 best.xyz id mol type q x y z ix iy iz
+run 0
+undump 100
+shell cd ..
+#in main dir for re_run purpose
+
+#assign initial values for the following two
+thermo_style custom step temp etotal c_m1m2E v_m1m2E
+thermo 100
+run		0  
+variable Enmin_G equal ${m1m2E}
+
+#variable Enstart_G equal ${m1m2E} #the inital value for searching the more stabe configuration
+# equation for stun algorithm
+variable eST_G equal  ln((v_m1m2E-v_Enmin_G)+sqrt((v_m1m2E-v_Enmin_G)*(v_m1m2E-v_Enmin_G)+1)) #1-exp(-0.05*(v_GrpGrpEng-v_Enmin_G)/count(all)) #-0.05(�אּ�����h���l���O�̮z)
+### The upper bound of ${eST} is 1, and 0 for energy=Enmin. negative when we find a structure with a lower energy
+variable STUN_last_G equal ${eST_G} #initial value for the last kept 
+
+#counter
+variable naccept_G equal 0
+variable increment_G equal v_naccept_G+1 # for counting MC accepting number
+variable nbetter equal 0
+variable incrbetter equal v_nbetter+1 # for labelling the better configuration of one inner bh loop
+
+variable BH_No loop ${bhloop} 
+
+#shell cd ${FoldName}
+#	dump 100 all custom 1 best.xyz id mol type q x y z ix iy iz
+#	run 0
+#	undump 100
+#shell cd ..
+  
+
+### Main BH_loop Start ###################
+label BH_loop
+print "adjust_ratio.in at ****BH_No: ${BH_No}"
+
+    include adjust_ratio.in ###need check
+
+#************ DMD ********************
+#print "DMD at ****BH_No: ${BH_No}"
+#    reset_timestep 0
+#    include all_data_mix100.in
+#    include system_opt.in 
+#    include DMD.in
+  
+#************ MD  *******************
+print "MD at ****BH_No: ${BH_No}"
+    reset_timestep 0
+    include all_data_mix.in
+    include system_opt.in 
+    include MD.in
+    include system_opt.in 
+
+    #shell cd ${FoldName}
+    #write_data bh_${BH_No}.data nocoeff 
+    #shell cd ..  
+    run 0 #for getting current state after you use write_data
+    print "****BH_No: ${BH_No}" 
+    print "Enmin_G: ${Enmin_G} "
+	print "eST_G: ${eST_G} "
+	print "current group/group: ${m1m2E}"
+	print "******"
+print "MC_keep.in at ****BH_No: ${BH_No}"
+   
+    include MC_keep.in
+	next BH_No
+jump SELF BH_loop
+
+print "******* ALL DONE ****"

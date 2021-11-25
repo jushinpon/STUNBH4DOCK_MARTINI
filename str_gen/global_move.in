@@ -1,0 +1,89 @@
+print "Big BH Loop Start"
+################################################
+shell cd ${FoldName}
+	read_dump ini.xyz 0 q x y z ix iy iz box yes replace yes add yes #format xyz   
+shell cd ..
+set group ${material_2} charge 0.0
+group water_ions molecule 15 18 19
+delete_atoms group water_ions
+#GLO1#####################
+#include system_opt_5000.in
+#GLO1#####################
+
+thermo 1
+thermo_style custom step c_center1[1] c_center1[2] c_center1[3] c_center2[1] c_center2[2] c_center2[3] c_1 c_2 
+run 0                                                                                                
+
+#For material_2 to Rotation self
+variable Rx1 equal 2*${MC_rn}-1                                                     
+variable Ry1 equal 2*${MC_rn}-1                                                                            
+variable Rz1 equal 2*${MC_rn}-1                                                                            
+variable Rx2 equal 2*${MC_rn}-1                                                                            
+variable Ry2 equal 2*${MC_rn}-1                                                                            
+variable Rz2 equal 2*${MC_rn}-1                                                                            
+variable norm1 equal sqrt(v_Rx1^2+v_Ry1^2+v_Rz1^2)                                     
+variable norm2 equal sqrt(v_Rx2^2+v_Ry2^2+v_Rz2^2)                                                     
+variable Rx11 equal v_Rx1/v_norm1                                                                      
+variable Ry11 equal v_Ry1/v_norm1                                                                      
+variable Rz11 equal v_Rz1/v_norm1                                                                      
+variable Rx22 equal v_Rx2/v_norm2                                                                      
+variable Ry22 equal v_Ry2/v_norm2                                                                      
+variable Rz22 equal v_Rz2/v_norm2                                                                      
+variable period1 equal ${Rangle_Big} ###rotating angle                                                                      
+variable period2 equal ${Rangle_Big} ###get smaller with the bigger ${Big_BH_No}                                                                     
+
+#Displace Atom Start
+#displace_atoms ${material_2} rotate ${xcom2} ${ycom2} ${zcom2} 1 0 0 90 units box #0 0 1 ${period1}  units box 
+displace_atoms ${material_2} rotate ${xcom2} ${ycom2} ${zcom2} 0 ${Ry22} 0 ${period1}  units box
+#displace_atoms ${material_1} rotate ${xcom1} ${ycom1} ${zcom1} 0 0 1 ${period2}  units box
+#balance 0.8 rcb
+run 0 #for get new v_zcom2
+variable Mat_2_Cen equal v_zcom2 #material 2 center
+variable Zmin equal bound(${material_1},zmin) #get DNA up z
+variable Zmax equal bound(${material_1},zmax) #get DNA down z
+variable DNA_lenght equal ${Zmax}-${Zmin} #get DNA down z
+variable Random_Z equal random(${Zmin}+(${DNA_lenght}*0.2),${Zmax}-(${DNA_lenght}*0.2),${seed})
+variable GETZ equal ${Random_Z}-${Mat_2_Cen}
+displace_atoms ${material_2} move 0 0 ${GETZ} units box
+#balance 0.8 rcb  
+
+#GLO2#####################
+#include system_opt_5000.in
+#GLO2#####################
+
+thermo_style custom step evdwl c_1 c_2 v_xmoveDNA v_ymoveDNA v_zmoveDNA   v_unitm   v_1to2_xmove  v_1to2_ymove  v_1to2_zmove 
+run 0
+
+# avoid from the overlapping of two molecules
+label avoid_overlap
+thermo_style custom step evdwl c_1 c_2 v_xmoveDNA v_ymoveDNA v_zmoveDNA   v_unitm   v_1to2_xmove  v_1to2_ymove  v_1to2_zmove v_2to1_xmove v_2to1_ymove v_2to1_zmove
+run 0
+    
+if "${GrpGrpEng} > 0.0" then &
+   "displace_atoms   ${material_1}  move  ${2to1_xmove}  ${2to1_ymove}  ${2to1_zmove}  units box" &       
+   #"balance 0.8 rcb"&
+   "jump global_move.in avoid_overlap"
+   
+label avoid_faraway
+thermo_style custom step evdwl c_1 c_2 v_xmoveDNA v_ymoveDNA v_zmoveDNA v_unitm v_1to2_xmove v_1to2_ymove v_1to2_zmove 
+run 0
+
+# for the case two molecules are far away
+if "${GrpGrpEng} == 0.0" then &   
+   "displace_atoms ${material_1}  move ${1to2_xmove} ${1to2_ymove} ${1to2_zmove} units box" &       
+   #"balance 0.8 rcb"&
+   "jump global_move.in avoid_faraway"
+
+set group all charge v_q
+
+run 0
+
+print "********** Final groupE after adjustment is ${GrpGrpEng}"
+
+####balance#####
+#comm_style      tiled
+                                                                                            
+#fix  10 all balance 1 0.95 rcb
+#run 0
+#unfix 10
+write_data global_move.data nocoeff
