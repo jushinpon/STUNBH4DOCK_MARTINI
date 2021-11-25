@@ -101,6 +101,7 @@ print "****MD before STUN_BH"
 shell cd ${FoldName}
 print	"Starting group/group energy = ${m1m2E}" append SABH_check.dat screen no  
 #initial structure for MC
+reset_timestep 0
 dump 11 all custom 1 MC.xyz id mol type q x y z ix iy iz
 run 0
 undump 11
